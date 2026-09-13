@@ -73,7 +73,7 @@ During setup, select the remote model mapping matching your physical ceiling fan
 | **Goldmedal** | BLDC Remote | 6 Speeds (1–6) | Sleep Mode, Breeze Mode, Timer (2h, 4h, 6h, 8h), LED Light | ✅ Opus Prime, Winzo, Spacio, Aura Lux |
 
 > [!NOTE]
-> Models not listed in this table are not blocked. Any ceiling fan utilizing the same brand remote protocol will function normally. The table above lists physically lab-verified units, not a hard compatibility limit.
+> Models not listed in this table are not blocked. Any ceiling fan utilizing the same brand remote protocol will function normally. The table above lists physically tested units, not a hard compatibility limit.
 
 ---
 
