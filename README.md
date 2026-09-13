@@ -1,5 +1,12 @@
 # Indian BLDC Fan Integration (formerly Superfan IR) (`superfan_ir`)
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="custom_components/superfan_ir/brand/dark_logo.png">
+    <img alt="Indian BLDC Fan Integration Logo" src="custom_components/superfan_ir/brand/logo.png" width="340">
+  </picture>
+</p>
+
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=flat-square)](https://github.com/hacs/integration)
 [![Stable](https://img.shields.io/github/v/release/selvakk2k/superfan_ir?label=Stable&style=flat-square)](https://github.com/selvakk2k/superfan_ir/releases/latest)
 [![Beta](https://img.shields.io/github/v/release/selvakk2k/superfan_ir?include_prereleases&label=Beta&color=orange&style=flat-square)](https://github.com/selvakk2k/superfan_ir/releases)
@@ -10,6 +17,10 @@ A Home Assistant custom integration for controlling Indian BLDC ceiling fans (At
 
 > [!TIP]
 > A companion Lovelace dashboard card is available: **[superfan-card](https://github.com/selvakk2k/superfan-card)** (Indian BLDC Fan Card).
+
+> [!NOTE]
+> ### Upgrading from 1.x to 2.0
+> Upgrading requires zero configuration changes. The integration domain remains `superfan_ir`. All existing fan entities, speed presets, and automations continue working as before. Version 2.0 expands support to Atomberg, Orient, Activa, and Goldmedal ceiling fans, and adds dynamic multi-blaster dispatch (ESPHome, Broadlink, Tuya).
 
 ---
 
@@ -39,6 +50,7 @@ Transmit commands using any common smart IR blaster hardware without needing man
 
 ### 2. Smart Switch Power Management
 If your ceiling fan is connected through a physical smart switch or relay (e.g. Sonoff, Shelly, Tuya):
+* **State Restoration & Sync:** The fan automatically restores its last-known speed percentage and state upon Home Assistant restart, and immediately reflects physical wall switch flips.
 * **Auto Power-on with Boot Delay:** Turning on the fan or changing speeds automatically powers on the physical wall switch and waits for the fan's receiver microcontroller to initialize (configurable 1–3 seconds) before transmitting the IR payload.
 * **Power-Off Bypass:** Turning the fan off cuts physical power immediately via the smart switch, saving standby power without relying on optical line-of-sight.
 
@@ -60,11 +72,15 @@ During setup, select the remote model mapping matching your physical ceiling fan
 | **Activa** | BLDC Remote | 6 Speeds (1–6 + Boost) | Boost Mode, Sleep Mode, Timer (1h, 2h, 4h, 8h) | ✅ Gracia, Energia, Apsara |
 | **Goldmedal** | BLDC Remote | 6 Speeds (1–6) | Sleep Mode, Breeze Mode, Timer (2h, 4h, 6h, 8h), LED Light | ✅ Opus Prime, Winzo, Spacio, Aura Lux |
 
+> [!NOTE]
+> Models not listed in this table are not blocked. Any ceiling fan utilizing the same brand remote protocol will function normally. The table above lists physically lab-verified units, not a hard compatibility limit.
+
 ---
 
 ## IR Blaster Compatibility & Formats
 
-The integration supports automatic format detection and explicit format selection:
+The integration automatically generates and encodes signals for all supported blaster hardware—no manual code learning or YAML packet crafting is required. In the setup wizard, simply select your existing `remote.*` or `infrared.*` entity:
+* **Auto-Detect**: Automatically identifies your blaster type (ESPHome, Broadlink, or Tuya) directly from the selected entity, with manual override available if desired.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -82,6 +98,8 @@ The integration supports automatic format detection and explicit format selectio
 ---
 
 ## Installation
+
+* **Prerequisites**: Home Assistant **2024.1.0** or newer.
 
 ### Method 1: Using HACS (Recommended)
 
