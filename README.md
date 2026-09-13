@@ -43,7 +43,6 @@ A Home Assistant custom integration for controlling Indian BLDC ceiling fans (At
 ### 1. Multi-Format IR Dispatch
 Transmit commands using any common smart IR blaster hardware without needing manual code learning:
 * **Native Home Assistant Infrared (`ir_rf_proxy` - Recommended):** Uses Home Assistant's native `infrared` platform to send microsecond timing arrays directly to ESPHome or native transmitter entities.
-* **ESPHome Raw Service:** Sends raw alternating pulse/space timings via native ESPHome API services (`esphome.<blaster>_transmit_raw`).
 * **Broadlink:** Transmits base64 Pronto-encoded packets via Broadlink RM4/RM mini remotes.
 * **Tuya Base64:** Sends compressed Tuya IR packets to Tuya-based Zigbee/Wi-Fi blasters (`remote.send_command`).
 * **Tasmota / MQTT:** Dispatches raw or NEC hex strings over MQTT to Tasmota-flashed IR bridges.
@@ -89,10 +88,11 @@ The integration automatically generates and encodes signals for all supported bl
                                │
             ┌──────────────────┴──────────────────┐
             ▼                                     ▼
-   [Native HA Infrared]                   [Remote Services]
+   [Native HA Infrared]                   [Remote Platform]
     • ir_rf_proxy (ESPHome)                • Broadlink Base64
-    • ESPHome Raw Service                  • Tuya Base64
-    • Tasmota / MQTT                       • Pronto Hex
+    • Microsecond Timing Arrays            • Tuya Base64
+                                           • Pronto Hex
+                                           • Tasmota / MQTT
 ```
 
 ---

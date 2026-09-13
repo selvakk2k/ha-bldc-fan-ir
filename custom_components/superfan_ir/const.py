@@ -46,8 +46,7 @@ IR_FORMAT_OPTIONS = {
 # Backward compatibility
 BACKEND_REMOTE = "Legacy Remote (Tuya)"
 BACKEND_INFRARED = "Native Infrared"
-BACKEND_ESPHOME = "ESPHome (Raw API Service)"
-BACKENDS = [BACKEND_REMOTE, BACKEND_INFRARED, BACKEND_ESPHOME]
+BACKENDS = [BACKEND_REMOTE, BACKEND_INFRARED]
 
 # Speed key to percentage mappings
 SPEED_MAP_6 = {"1": 17, "2": 33, "3": 50, "4": 67, "5": 83, "6": 100, "Boost": 100}
