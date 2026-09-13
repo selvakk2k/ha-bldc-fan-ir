@@ -120,12 +120,14 @@ The integration automatically generates and encodes signals for all supported bl
 
 1. In Home Assistant, go to **Settings → Devices & Services → Add Integration**.
 2. Search for **Indian BLDC Fan IR**.
-3. Fill in the setup wizard:
-   * **Name**: Friendly name for your fan (e.g. *Living Room Fan*).
-   * **Fan Model**: Select your brand and remote model (e.g. *Atomberg BLDC*, *Superfan T10*, *Orient BLDC*).
-   * **IR Format**: Choose *Auto-Detect*, *Native Infrared*, *Broadlink*, *Tuya*, or *Tasmota*.
-   * **Transmitter Entity**: Select the target transmitter entity or ESPHome device.
-4. (Optional) After setup, click **Configure** on the integration card to bind a physical **Power Switch** entity.
+3. In **Step 1: Indian BLDC Fan Setup (Optical IR)**:
+   * **Fan Name**: Friendly name for this fan entity (e.g. *Living Room Fan*).
+   * **Fan Brand & Remote Model**: Select your fan brand and remote model (e.g. *Atomberg BLDC*, *Superfan T10*, *Orient BLDC*).
+   * **IR Format**: Select the signal encoding format expected by your blaster (`Auto-Detect`, `Home Assistant Infrared / ESPHome Raw`, `Broadlink Base64`, `Tuya Base64`, or `Tasmota / MQTT`).
+4. In **Step 2: Select IR Transmitter**:
+   * **IR Transmitter Entity**: Select your `infrared.*` or `remote.*` blaster entity.
+5. *(Optional Options Flow)*: Click **Configure** on the fan card to adjust settings or bind an **IR Receiver Entity (Optional)** or **Power Switch Entity (Optional)**.
+
 
 ---
 
