@@ -12,11 +12,8 @@ from .const import (
     CONF_FAN_MODEL,
     DOMAIN,
     MODEL_ATOMBERG,
-    MODEL_ACTIVA,
-    MODEL_ORIENT,
-    MODEL_GOLDMEDAL,
-    MODEL_T10,
 )
+from .utils import get_manufacturer
 
 
 async def async_setup_entry(
@@ -29,12 +26,7 @@ async def async_setup_entry(
         CONF_FAN_MODEL, entry.data.get(CONF_FAN_MODEL, MODEL_ATOMBERG)
     )
 
-    async_add_entities([
-        SuperfanLastControlledViaSensor(
-            entry=entry,
-            fan_model=fan_model,
-        )
-    ])
+    async_add_entities([SuperfanLastControlledViaSensor(entry, fan_model)])
 
 
 class SuperfanLastControlledViaSensor(SensorEntity, RestoreEntity):
@@ -55,21 +47,10 @@ class SuperfanLastControlledViaSensor(SensorEntity, RestoreEntity):
         self._attr_unique_id = f"{entry.entry_id}_last_controlled_via"
         self._state_val = "IR Blaster"
 
-        if self._model == MODEL_ATOMBERG:
-            brand_name = "Atomberg"
-        elif self._model == MODEL_ACTIVA:
-            brand_name = "Activa Appliances"
-        elif self._model == MODEL_ORIENT:
-            brand_name = "Orient Electric"
-        elif self._model == MODEL_GOLDMEDAL:
-            brand_name = "Goldmedal Electricals"
-        else:
-            brand_name = "Versa Drives (Superfan)"
-
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},
             "name": entry.title,
-            "manufacturer": brand_name,
+            "manufacturer": get_manufacturer(fan_model),
             "model": fan_model,
         }
 

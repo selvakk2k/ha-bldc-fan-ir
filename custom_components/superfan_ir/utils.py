@@ -1,5 +1,9 @@
-import base64
-from struct import unpack
+from .const import (
+    MODEL_ACTIVA,
+    MODEL_ATOMBERG,
+    MODEL_GOLDMEDAL,
+    MODEL_ORIENT,
+)
 
 try:
     from infrared_protocols.commands import Command  # type: ignore[import-not-found, import-untyped]
@@ -26,20 +30,15 @@ class RawIRCommand(Command):  # type: ignore[misc, valid-type]
         """Get raw timings for the command."""
         return self._raw_timings
 
-def decode_tuya_to_raw(tuya_code_string: str) -> list[int]:
-    '''
-    Decodes a Tuya IR code string into a raw IR signal (list of durations).
-    These codes are plain base64 encoded little-endian uint16 arrays.
-    '''
-    # Strip any prefix like "b64:" if present
-    if tuya_code_string.startswith("b64:"):
-        tuya_code_string = tuya_code_string[4:]
-        
-    payload_bytes = base64.b64decode(tuya_code_string)
 
-    ir_signal_durations = []
-    buffer = memoryview(payload_bytes)
-    for i in range(0, len(payload_bytes), 2):
-        if i + 2 <= len(payload_bytes):
-            ir_signal_durations.append(unpack('<H', buffer[i:i+2])[0])
-    return ir_signal_durations
+def get_manufacturer(model: str) -> str:
+    """Return the manufacturer / brand name for a given fan model."""
+    if model == MODEL_ATOMBERG:
+        return "Atomberg"
+    if model == MODEL_ACTIVA:
+        return "Activa Appliances"
+    if model == MODEL_ORIENT:
+        return "Orient Electric"
+    if model == MODEL_GOLDMEDAL:
+        return "Goldmedal Electricals"
+    return "Versa Drives (Superfan)"

@@ -44,14 +44,16 @@
           "ir_format": "IR Format",
           "emitter_entity_id": "IR Transmitter Entity",
           "receiver_entity_id": "IR Receiver Entity (Optional)",
-          "power_switch": "Power Switch Entity (Optional)"
+          "power_switch": "Power Switch Entity (Optional)",
+          "boot_delay": "Boot Delay (Seconds)"
         },
         "data_description": {
           "fan_model": "Change or adjust your fan remote model.",
           "ir_format": "Change the IR signal encoding format.",
           "emitter_entity_id": "Entity ID of your IR blaster or remote.",
           "receiver_entity_id": "Optional infrared/remote entity receiving physical IR remote clicks for state synchronization.",
-          "power_switch": "Optional smart plug or relay controlling mains power to the fan."
+          "power_switch": "Optional smart plug or relay controlling mains power to the fan.",
+          "boot_delay": "Grace period in seconds to wait for the fan receiver MCU to boot after turning on mains power."
         }
       }
     }

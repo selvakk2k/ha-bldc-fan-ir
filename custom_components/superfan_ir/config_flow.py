@@ -14,11 +14,13 @@ from homeassistant.core import callback
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_BOOT_DELAY,
     CONF_EMITTER_ENTITY_ID,
     CONF_FAN_MODEL,
     CONF_IR_FORMAT,
     CONF_POWER_SWITCH,
     CONF_RECEIVER_ENTITY_ID,
+    DEFAULT_BOOT_DELAY,
     DOMAIN,
     IR_FORMAT_AUTO,
     IR_FORMAT_OPTIONS,
@@ -160,6 +162,12 @@ class SuperfanOptionsFlow(OptionsFlow):
             CONF_POWER_SWITCH,
             self._config_entry.data.get(CONF_POWER_SWITCH, ""),
         )
+        current_boot_delay = float(
+            self._config_entry.options.get(
+                CONF_BOOT_DELAY,
+                self._config_entry.data.get(CONF_BOOT_DELAY, DEFAULT_BOOT_DELAY),
+            )
+        )
 
         schema = vol.Schema({
             vol.Required(CONF_FAN_MODEL): selector.SelectSelector(
@@ -183,6 +191,15 @@ class SuperfanOptionsFlow(OptionsFlow):
             vol.Optional(CONF_POWER_SWITCH): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="switch")
             ),
+            vol.Optional(CONF_BOOT_DELAY, default=DEFAULT_BOOT_DELAY): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0.5,
+                    max=5.0,
+                    step=0.1,
+                    unit_of_measurement="s",
+                    mode=selector.NumberSelectorMode.SLIDER,
+                )
+            ),
         })
 
         suggested = {
@@ -191,6 +208,7 @@ class SuperfanOptionsFlow(OptionsFlow):
             CONF_EMITTER_ENTITY_ID: current_emitter,
             CONF_RECEIVER_ENTITY_ID: current_receiver,
             CONF_POWER_SWITCH: current_switch,
+            CONF_BOOT_DELAY: current_boot_delay,
         }
         schema = self.add_suggested_values_to_schema(schema, suggested)
 

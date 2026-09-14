@@ -16,11 +16,8 @@ from .const import (
     CONF_FAN_MODEL,
     DOMAIN,
     MODEL_ATOMBERG,
-    MODEL_ACTIVA,
-    MODEL_ORIENT,
-    MODEL_GOLDMEDAL,
-    MODEL_T10,
 )
+from .utils import get_manufacturer
 
 
 async def async_setup_entry(
@@ -65,21 +62,10 @@ class SuperfanIRBlasterAvailableBinarySensor(BinarySensorEntity):
         self._emitter_id = emitter_id
         self._attr_unique_id = f"{entry.entry_id}_ir_blaster_available"
 
-        if self._model == MODEL_ATOMBERG:
-            brand_name = "Atomberg"
-        elif self._model == MODEL_ACTIVA:
-            brand_name = "Activa Appliances"
-        elif self._model == MODEL_ORIENT:
-            brand_name = "Orient Electric"
-        elif self._model == MODEL_GOLDMEDAL:
-            brand_name = "Goldmedal Electricals"
-        else:
-            brand_name = "Versa Drives (Superfan)"
-
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},
             "name": entry.title,
-            "manufacturer": brand_name,
+            "manufacturer": get_manufacturer(fan_model),
             "model": fan_model,
         }
 

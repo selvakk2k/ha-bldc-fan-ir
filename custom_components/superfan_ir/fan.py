@@ -15,11 +15,16 @@ from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import (
+    BACKEND_INFRARED,
+    BACKEND_REMOTE,
+    CONF_BACKEND,
+    CONF_BOOT_DELAY,
     CONF_EMITTER_ENTITY_ID,
     CONF_FAN_MODEL,
     CONF_IR_FORMAT,
     CONF_POWER_SWITCH,
     CONF_RECEIVER_ENTITY_ID,
+    DEFAULT_BOOT_DELAY,
     DOMAIN,
     IR_FORMAT_AUTO,
     IR_FORMAT_BROADLINK,
@@ -39,6 +44,7 @@ from .const import (
     SPEED_MAP_3,
 )
 from .ir import SuperfanNEC
+from .utils import get_manufacturer
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -99,7 +105,16 @@ async def async_setup_entry(
 ) -> None:
     """Set up the Fan from a config entry."""
     fan_model = entry.options.get(CONF_FAN_MODEL, entry.data.get(CONF_FAN_MODEL, MODEL_T10))
-    ir_format = entry.options.get(CONF_IR_FORMAT, entry.data.get(CONF_IR_FORMAT, IR_FORMAT_AUTO))
+    ir_format = entry.options.get(CONF_IR_FORMAT, entry.data.get(CONF_IR_FORMAT))
+    if not ir_format:
+        old_backend = entry.data.get(CONF_BACKEND)
+        if old_backend == BACKEND_INFRARED:
+            ir_format = IR_FORMAT_RAW
+        elif old_backend == BACKEND_REMOTE:
+            ir_format = IR_FORMAT_TUYA
+        else:
+            ir_format = IR_FORMAT_AUTO
+
     emitter_id = entry.options.get(
         CONF_EMITTER_ENTITY_ID, entry.data.get(CONF_EMITTER_ENTITY_ID)
     )
@@ -108,6 +123,12 @@ async def async_setup_entry(
     )
     power_switch = entry.options.get(
         CONF_POWER_SWITCH, entry.data.get(CONF_POWER_SWITCH)
+    )
+    boot_delay = float(
+        entry.options.get(
+            CONF_BOOT_DELAY,
+            entry.data.get(CONF_BOOT_DELAY, DEFAULT_BOOT_DELAY),
+        )
     )
 
     async_add_entities([
@@ -118,6 +139,7 @@ async def async_setup_entry(
             emitter_id=emitter_id,
             receiver_id=receiver_id,
             power_switch=power_switch,
+            boot_delay=boot_delay,
         )
     ])
 
@@ -143,6 +165,7 @@ class SuperfanEntity(FanEntity, RestoreEntity):
         receiver_id: str | None = None,
         power_switch: str | None = None,
         backend: str | None = None,
+        boot_delay: float = DEFAULT_BOOT_DELAY,
     ) -> None:
         """Initialize the fan."""
         self._entry = entry
@@ -151,41 +174,36 @@ class SuperfanEntity(FanEntity, RestoreEntity):
         self._emitter_id = emitter_id
         self._receiver_id = receiver_id
         self._power_switch = power_switch
+        self._boot_delay = boot_delay
 
         self._attr_unique_id = f"{entry.entry_id}_fan"
         self._attr_name = None
 
-        # Determine speed count, brand name, presets based on model
+        # Determine speed count, presets based on model
         if self._model == MODEL_ATOMBERG:
             self._attr_speed_count = 6
             self._attr_preset_modes = ATOMBERG_PRESET_MODES
             default_pct = 50
-            brand_name = "Atomberg"
         elif self._model == MODEL_ACTIVA:
             self._attr_speed_count = 6
             self._attr_preset_modes = ACTIVA_PRESET_MODES
             default_pct = 50
-            brand_name = "Activa Appliances"
         elif self._model == MODEL_ORIENT:
             self._attr_speed_count = 5
             self._attr_preset_modes = ORIENT_PRESET_MODES
             default_pct = 60
-            brand_name = "Orient Electric"
         elif self._model == MODEL_GOLDMEDAL:
             self._attr_speed_count = 5
             self._attr_preset_modes = GOLDMEDAL_PRESET_MODES
             default_pct = 60
-            brand_name = "Goldmedal Electricals"
         elif self._model == MODEL_T10:
             self._attr_speed_count = 5
             self._attr_preset_modes = SUPERFAN_T10_PRESET_MODES
             default_pct = 60
-            brand_name = "Versa Drives (Superfan)"
         else:
             self._attr_speed_count = 3
             self._attr_preset_modes = SUPERFAN_T12_6_PRESET_MODES
             default_pct = 66
-            brand_name = "Versa Drives (Superfan)"
 
         self._default_pct: int = default_pct
         self._switch_turned_on_time: float = 0.0
@@ -205,7 +223,7 @@ class SuperfanEntity(FanEntity, RestoreEntity):
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},
             "name": entry.title or "Fan",
-            "manufacturer": brand_name,
+            "manufacturer": get_manufacturer(self._model),
             "model": self._model,
         }
 
@@ -470,13 +488,13 @@ class SuperfanEntity(FanEntity, RestoreEntity):
                 context=self._context,
             )
             self._switch_turned_on_time = time.monotonic()
-            await asyncio.sleep(1.5)
+            await asyncio.sleep(self._boot_delay)
             return
 
         # Switch is confirmed ON; wait for MCU boot grace period if recently turned on
         elapsed = time.monotonic() - self._switch_turned_on_time
-        if elapsed < 1.5:
-            await asyncio.sleep(max(0.1, 1.5 - elapsed))
+        if elapsed < self._boot_delay:
+            await asyncio.sleep(max(0.1, self._boot_delay - elapsed))
 
     def _notify_control_source(self, source: str) -> None:
         """Update shared last controlled via sensor."""
@@ -512,15 +530,35 @@ class SuperfanEntity(FanEntity, RestoreEntity):
             )
 
             if fmt == IR_FORMAT_AUTO:
-                emitter_lower = emitter.lower()
-                if emitter.startswith("infrared."):
-                    fmt = IR_FORMAT_RAW
-                elif "broadlink" in emitter_lower:
+                from homeassistant.helpers import entity_registry as er
+
+                try:
+                    ent_reg = er.async_get(self.hass)
+                    ent_entry = ent_reg.async_get(emitter) if ent_reg else None
+                    platform = (
+                        ent_entry.platform
+                        if (ent_entry and isinstance(getattr(ent_entry, "platform", None), str))
+                        else None
+                    )
+                except Exception:
+                    platform = None
+
+                if platform == "broadlink":
                     fmt = IR_FORMAT_BROADLINK
-                elif emitter.startswith("remote."):
+                elif platform == "tuya":
                     fmt = IR_FORMAT_TUYA
-                else:
+                elif platform == "tasmota":
+                    fmt = IR_FORMAT_TASMOTA
+                elif platform in ("esphome", "infrared") or emitter.startswith("infrared."):
                     fmt = IR_FORMAT_RAW
+                else:
+                    emitter_lower = emitter.lower()
+                    if "broadlink" in emitter_lower:
+                        fmt = IR_FORMAT_BROADLINK
+                    elif emitter.startswith("remote."):
+                        fmt = IR_FORMAT_TUYA
+                    else:
+                        fmt = IR_FORMAT_RAW
 
             if fmt == IR_FORMAT_BROADLINK:
                 payload = SuperfanNEC.get_broadlink_base64(code_key, self._model)
@@ -533,6 +571,7 @@ class SuperfanEntity(FanEntity, RestoreEntity):
                         "num_repeats": 2,
                         "delay_secs": 0.1,
                     },
+                    blocking=True,
                     context=self._context,
                 )
             elif fmt == IR_FORMAT_TUYA:
@@ -546,6 +585,7 @@ class SuperfanEntity(FanEntity, RestoreEntity):
                         "num_repeats": 2,
                         "delay_secs": 0.1,
                     },
+                    blocking=True,
                     context=self._context,
                 )
             elif fmt == IR_FORMAT_PRONTO:
@@ -559,6 +599,7 @@ class SuperfanEntity(FanEntity, RestoreEntity):
                         "num_repeats": 2,
                         "delay_secs": 0.1,
                     },
+                    blocking=True,
                     context=self._context,
                 )
             elif fmt == IR_FORMAT_TASMOTA:
@@ -570,6 +611,7 @@ class SuperfanEntity(FanEntity, RestoreEntity):
                         "entity_id": emitter,
                         "command": [tasmota_payload["Data"]],
                     },
+                    blocking=True,
                     context=self._context,
                 )
             else:

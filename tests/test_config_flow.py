@@ -2,11 +2,13 @@ import pytest
 from unittest.mock import MagicMock
 from custom_components.superfan_ir.config_flow import SuperfanConfigFlow, SuperfanOptionsFlow
 from custom_components.superfan_ir.const import (
+    CONF_BOOT_DELAY,
     CONF_EMITTER_ENTITY_ID,
     CONF_FAN_MODEL,
     CONF_IR_FORMAT,
     CONF_POWER_SWITCH,
     CONF_RECEIVER_ENTITY_ID,
+    DEFAULT_BOOT_DELAY,
     IR_FORMAT_AUTO,
     IR_FORMAT_PRONTO,
     MODEL_ATOMBERG,
@@ -50,12 +52,17 @@ async def test_options_flow():
     flow = SuperfanOptionsFlow(entry)
     flow.hass = MagicMock()
 
+    form = await flow.async_step_init(None)
+    assert form["type"] == "form"
+    assert form["step_id"] == "init"
+
     res = await flow.async_step_init({
         CONF_FAN_MODEL: MODEL_ATOMBERG,
         CONF_IR_FORMAT: IR_FORMAT_PRONTO,
         CONF_EMITTER_ENTITY_ID: "remote.broadlink_rm",
         CONF_RECEIVER_ENTITY_ID: "sensor.esphome_rx",
         CONF_POWER_SWITCH: "switch.smart_plug",
+        CONF_BOOT_DELAY: 2.5,
     })
     assert res["type"] == "create_entry"
     assert res["data"][CONF_FAN_MODEL] == MODEL_ATOMBERG
@@ -63,3 +70,4 @@ async def test_options_flow():
     assert res["data"][CONF_EMITTER_ENTITY_ID] == "remote.broadlink_rm"
     assert res["data"][CONF_RECEIVER_ENTITY_ID] == "sensor.esphome_rx"
     assert res["data"][CONF_POWER_SWITCH] == "switch.smart_plug"
+    assert res["data"][CONF_BOOT_DELAY] == 2.5

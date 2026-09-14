@@ -755,3 +755,141 @@ async def test_guarded_resync_toggle_presets_not_resynced(mock_entry):
         mock_resync.assert_not_called()
 
 
+@pytest.mark.asyncio
+async def test_send_ir_command_auto_detect_entity_registry_broadlink(mock_entry):
+    """Test that renamed entity (without 'broadlink' in name) auto-detects to broadlink via entity registry."""
+    from custom_components.superfan_ir.const import IR_FORMAT_AUTO
+    fan = SuperfanEntity(
+        entry=mock_entry,
+        fan_model=MODEL_T10,
+        emitter_id="remote.living_room_blaster",
+        ir_format=IR_FORMAT_AUTO,
+    )
+    fan.entity_id = "fan.test_fan"
+    fan.hass = MagicMock()
+    fan.hass.services.async_call = AsyncMock()
+
+    mock_reg = MagicMock()
+    mock_entry_reg = MagicMock()
+    mock_entry_reg.platform = "broadlink"
+    mock_reg.async_get.return_value = mock_entry_reg
+
+    with patch("homeassistant.helpers.entity_registry.async_get", return_value=mock_reg):
+        await fan._send_ir_command("1")
+
+    fan.hass.services.async_call.assert_called_once()
+    domain, service, service_data = fan.hass.services.async_call.call_args[0]
+    kwargs = fan.hass.services.async_call.call_args[1]
+    assert domain == "remote"
+    assert service == "send_command"
+    assert service_data["entity_id"] == "remote.living_room_blaster"
+    assert service_data["command"][0].startswith("b64:")
+    assert kwargs.get("blocking") is True
+
+
+@pytest.mark.asyncio
+async def test_send_ir_command_auto_detect_entity_registry_tasmota(mock_entry):
+    """Test that entity with platform 'tasmota' in registry auto-detects to tasmota."""
+    from custom_components.superfan_ir.const import IR_FORMAT_AUTO
+    fan = SuperfanEntity(
+        entry=mock_entry,
+        fan_model=MODEL_T10,
+        emitter_id="remote.living_room_blaster",
+        ir_format=IR_FORMAT_AUTO,
+    )
+    fan.entity_id = "fan.test_fan"
+    fan.hass = MagicMock()
+    fan.hass.services.async_call = AsyncMock()
+
+    mock_reg = MagicMock()
+    mock_entry_reg = MagicMock()
+    mock_entry_reg.platform = "tasmota"
+    mock_reg.async_get.return_value = mock_entry_reg
+
+    with patch("homeassistant.helpers.entity_registry.async_get", return_value=mock_reg):
+        await fan._send_ir_command("1")
+
+    fan.hass.services.async_call.assert_called_once()
+    domain, service, service_data = fan.hass.services.async_call.call_args[0]
+    kwargs = fan.hass.services.async_call.call_args[1]
+    assert domain == "remote"
+    assert service == "send_command"
+    assert service_data["entity_id"] == "remote.living_room_blaster"
+    from custom_components.superfan_ir.ir import SuperfanNEC
+    assert service_data["command"][0] == SuperfanNEC.get_tasmota_payload("1", MODEL_T10)["Data"]
+    assert kwargs.get("blocking") is True
+
+
+@pytest.mark.asyncio
+async def test_configurable_boot_delay(mock_entry):
+    """Test that configured boot delay is honored when turning on power switch."""
+    fan = SuperfanEntity(
+        entry=mock_entry,
+        fan_model=MODEL_T10,
+        emitter_id="infrared.living_blaster",
+        power_switch="switch.fan_smart_plug",
+        boot_delay=2.5,
+    )
+    fan.entity_id = "fan.master_bedroom_fan"
+    fan.hass = MagicMock()
+    fan.hass.services.async_call = AsyncMock()
+
+    switch_state = MagicMock()
+    switch_state.state = "off"
+    fan.hass.states.get.return_value = switch_state
+
+    with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep, patch.object(
+        fan, "_send_ir_command", new_callable=AsyncMock
+    ) as mock_send, patch.object(fan, "async_write_ha_state"):
+        await fan.async_turn_on()
+        mock_sleep.assert_called_with(2.5)
+        mock_send.assert_called_with("3")
+
+
+@pytest.mark.asyncio
+async def test_async_setup_entry_backend_backward_compatibility():
+    """Test that legacy CONF_BACKEND translates to correct IR format."""
+    from custom_components.superfan_ir.fan import async_setup_entry
+    from custom_components.superfan_ir.const import (
+        BACKEND_INFRARED,
+        BACKEND_REMOTE,
+        CONF_BACKEND,
+        IR_FORMAT_RAW,
+        IR_FORMAT_TUYA,
+    )
+
+    hass = MagicMock()
+
+    # Case 1: Legacy Infrared backend
+    entry1 = MagicMock()
+    entry1.entry_id = "test_entry_1"
+    entry1.title = "Legacy Fan 1"
+    entry1.data = {
+        CONF_BACKEND: BACKEND_INFRARED,
+        "emitter_entity_id": "infrared.blaster",
+        "fan_model": MODEL_T10,
+    }
+    entry1.options = {}
+
+    added_entities1 = []
+    await async_setup_entry(hass, entry1, lambda entities: added_entities1.extend(entities))
+    assert len(added_entities1) == 1
+    assert added_entities1[0]._ir_format == IR_FORMAT_RAW
+
+    # Case 2: Legacy Remote (Tuya) backend
+    entry2 = MagicMock()
+    entry2.entry_id = "test_entry_2"
+    entry2.title = "Legacy Fan 2"
+    entry2.data = {
+        CONF_BACKEND: BACKEND_REMOTE,
+        "emitter_entity_id": "remote.blaster",
+        "fan_model": MODEL_T10,
+    }
+    entry2.options = {}
+
+    added_entities2 = []
+    await async_setup_entry(hass, entry2, lambda entities: added_entities2.extend(entities))
+    assert len(added_entities2) == 1
+    assert added_entities2[0]._ir_format == IR_FORMAT_TUYA
+
+

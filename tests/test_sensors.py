@@ -62,3 +62,31 @@ async def test_last_controlled_via_sensor(mock_entry):
     entry_data.set_last_controlled_via("Mains Switch")
     assert sensor.native_value == "Mains Switch"
     assert sensor.icon == "mdi:toggle-switch"
+
+
+def test_device_info_manufacturer_resolution(mock_entry):
+    """Verify that get_manufacturer correctly assigns manufacturers across platforms."""
+    from custom_components.superfan_ir.const import (
+        MODEL_ACTIVA,
+        MODEL_ATOMBERG,
+        MODEL_GOLDMEDAL,
+        MODEL_ORIENT,
+        MODEL_T10,
+        MODEL_T12_6,
+    )
+    from custom_components.superfan_ir.utils import get_manufacturer
+
+    assert get_manufacturer(MODEL_ATOMBERG) == "Atomberg"
+    assert get_manufacturer(MODEL_ACTIVA) == "Activa Appliances"
+    assert get_manufacturer(MODEL_ORIENT) == "Orient Electric"
+    assert get_manufacturer(MODEL_GOLDMEDAL) == "Goldmedal Electricals"
+    assert get_manufacturer(MODEL_T10) == "Versa Drives (Superfan)"
+    assert get_manufacturer(MODEL_T12_6) == "Versa Drives (Superfan)"
+
+    # Verify sensor device_info uses get_manufacturer
+    sensor = SuperfanLastControlledViaSensor(mock_entry, MODEL_ORIENT)
+    assert sensor._attr_device_info["manufacturer"] == "Orient Electric"
+
+    # Verify binary sensor device_info uses get_manufacturer
+    binary_sensor = SuperfanIRBlasterAvailableBinarySensor(mock_entry, MODEL_GOLDMEDAL, "remote.blaster")
+    assert binary_sensor._attr_device_info["manufacturer"] == "Goldmedal Electricals"

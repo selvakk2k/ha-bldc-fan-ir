@@ -8,6 +8,8 @@ CONF_BACKEND = "backend"  # Backward compatibility
 CONF_EMITTER_ENTITY_ID = "emitter_entity_id"
 CONF_RECEIVER_ENTITY_ID = "receiver_entity_id"
 CONF_POWER_SWITCH = "power_switch"
+CONF_BOOT_DELAY = "boot_delay"
+DEFAULT_BOOT_DELAY = 1.5
 
 MODEL_T10 = "SuperfanT10"
 MODEL_T12_6 = "SuperfanT12/6"
