@@ -89,7 +89,7 @@ The integration automatically generates and encodes signals for all supported bl
             ┌──────────────────┴──────────────────┐
             ▼                                     ▼
    [Native HA Infrared]                   [Remote Platform]
-    • ir_rf_proxy (ESPHome)                • Broadlink Base64
+    • ir_rf_proxy                          • Broadlink Base64
     • Microsecond Timing Arrays            • Tuya Base64
                                            • Pronto Hex
                                            • Tasmota / MQTT
