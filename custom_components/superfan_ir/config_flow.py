@@ -114,7 +114,7 @@ class SuperfanConfigFlow(ConfigFlow, domain=DOMAIN):
         data_schema = vol.Schema({
             vol.Required(CONF_EMITTER_ENTITY_ID): emitter_selector,
             vol.Optional(CONF_AVAILABILITY_ENTITY_ID): selector.EntitySelector(
-                selector.EntitySelectorConfig(domain=["binary_sensor", "input_boolean", "switch"])
+                selector.EntitySelectorConfig(domain=["binary_sensor", "input_boolean", "switch", "device_tracker"])
             ),
         })
 
@@ -197,7 +197,7 @@ class SuperfanOptionsFlow(OptionsFlow):
                 selector.EntitySelectorConfig(domain=["infrared", "remote"])
             ),
             vol.Optional(CONF_AVAILABILITY_ENTITY_ID): selector.EntitySelector(
-                selector.EntitySelectorConfig(domain=["binary_sensor", "input_boolean", "switch"])
+                selector.EntitySelectorConfig(domain=["binary_sensor", "input_boolean", "switch", "device_tracker"])
             ),
             vol.Optional(CONF_POWER_SWITCH): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="switch")

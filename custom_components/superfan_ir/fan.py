@@ -588,13 +588,13 @@ class SuperfanEntity(FanEntity, RestoreEntity):
             st = self.hass.states.get(self._availability_entity_id)
             if st is not None and not is_blaster_available_by_sensor(st, self._availability_entity_id):
                 _LOGGER.warning(
-                    "[Superfan IR] Command '%s' blocked: IR transmitter %s is cut off by %s",
+                    "[Superfan IR] Command '%s' blocked: IR transmitter %s is unavailable per %s",
                     code_key,
                     emitter,
                     self._availability_entity_id,
                 )
                 raise HomeAssistantError(
-                    f"IR transmitter {emitter} is cut off by {self._availability_entity_id}"
+                    f"IR transmitter {emitter} is unavailable per {self._availability_entity_id}"
                 )
 
         self._notify_control_source("IR Blaster")

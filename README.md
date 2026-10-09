@@ -126,7 +126,7 @@ The integration automatically generates and encodes signals for all supported bl
    * **IR Format**: Select the signal encoding format expected by your blaster (`Auto-Detect`, `Home Assistant Infrared / ESPHome Raw`, `Broadlink Base64`, `Tuya Base64`, or `Tasmota / MQTT`).
 4. In **Step 2: Select IR Transmitter**:
    * **IR Transmitter Entity**: Select your `infrared.*` or `remote.*` blaster entity.
-   * **Availability / Cutoff Entity (Optional)**: Select an availability sensor (`binary_sensor`, `input_boolean`, or `switch`) to detect blaster outages immediately. If the entity ID contains `cutoff` (e.g. `input_boolean.fake_ir_cutoff`), its state is automatically inverted (`on` = cut off / offline, `off` = connected / online).
+   * **Availability / Status Entity (Optional)**: Select an availability entity (`binary_sensor`, `input_boolean`, `switch`, or `device_tracker`, such as a smart plug, network router tracker, or helper) to detect blaster outages immediately without waiting for Home Assistant's default 90-120 second TCP timeout. Standard state values (`on`, `home`, `connected`) indicate the blaster is online and available; any other state marks it offline.
 5. *(Optional Options Flow)*: Click **Configure** on the fan card to adjust settings or bind an **IR Receiver Entity (Optional)**, **Power Switch Entity (Optional)**, or **Availability Entity (Optional)**.
 
 

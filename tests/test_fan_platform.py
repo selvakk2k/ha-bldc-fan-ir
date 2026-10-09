@@ -941,7 +941,7 @@ async def test_is_esphome_2026_10_or_newer_util():
 
 @pytest.mark.asyncio
 async def test_is_blaster_available_by_sensor_util():
-    """Test availability sensor evaluation and cutoff inversion logic in utils."""
+    """Test availability sensor evaluation logic in utils."""
     from custom_components.superfan_ir.utils import is_blaster_available_by_sensor
 
     # None / empty returns True
@@ -949,26 +949,26 @@ async def test_is_blaster_available_by_sensor_util():
     assert is_blaster_available_by_sensor("on", None) is True
     assert is_blaster_available_by_sensor(None, "binary_sensor.blaster") is True
 
-    # Fake cutoff switch (inversion logic: 'on' = cut off / unavailable, 'off' = available)
-    cutoff_id = "input_boolean.fake_ir_cutoff"
-    assert is_blaster_available_by_sensor("off", cutoff_id) is True
-    assert is_blaster_available_by_sensor("on", cutoff_id) is False
-    assert is_blaster_available_by_sensor("unavailable", cutoff_id) is False
+    # Standard switch / plug / presence sensor (normal logic: 'on' = available, 'off' = unavailable)
+    switch_id = "switch.ir_blaster_plug"
+    assert is_blaster_available_by_sensor("on", switch_id) is True
+    assert is_blaster_available_by_sensor("off", switch_id) is False
+    assert is_blaster_available_by_sensor("unavailable", switch_id) is False
 
-    # Standard ping / presence sensor (normal logic: 'on' = available, 'off' = unavailable)
-    ping_id = "binary_sensor.blaster_ping"
-    assert is_blaster_available_by_sensor("on", ping_id) is True
-    assert is_blaster_available_by_sensor("off", ping_id) is False
-    assert is_blaster_available_by_sensor("unavailable", ping_id) is False
+    # Device tracker (presence logic: 'home' = available, 'not_home' = unavailable)
+    tracker_id = "device_tracker.ir_blaster"
+    assert is_blaster_available_by_sensor("home", tracker_id) is True
+    assert is_blaster_available_by_sensor("not_home", tracker_id) is False
+    assert is_blaster_available_by_sensor("unavailable", tracker_id) is False
 
 
 @pytest.mark.asyncio
-async def test_superfan_availability_entity_and_cutoff(mock_entry):
+async def test_superfan_availability_entity_and_power(mock_entry):
     """Test that SuperfanEntity respects availability_entity_id and triggers reconnect resync."""
     from homeassistant.exceptions import HomeAssistantError
     from custom_components.superfan_ir.const import CONF_AVAILABILITY_ENTITY_ID
 
-    mock_entry.data[CONF_AVAILABILITY_ENTITY_ID] = "input_boolean.fake_ir_cutoff"
+    mock_entry.data[CONF_AVAILABILITY_ENTITY_ID] = "switch.smart_plug"
     fan = SuperfanEntity(
         entry=mock_entry,
         fan_model=MODEL_T10,
@@ -977,24 +977,24 @@ async def test_superfan_availability_entity_and_cutoff(mock_entry):
     )
     fan.entity_id = "fan.test_fan"
     fan.hass = MagicMock()
-    fan.hass.states.get.side_effect = lambda eid: MagicMock(state="available") if eid == "infrared.living_blaster" else MagicMock(state="off")
+    fan.hass.states.get.side_effect = lambda eid: MagicMock(state="available") if eid == "infrared.living_blaster" else MagicMock(state="on")
 
     assert fan.available is True
 
-    # Cut off blaster
-    fan.hass.states.get.side_effect = lambda eid: MagicMock(state="available") if eid == "infrared.living_blaster" else MagicMock(state="on")
+    # Power off blaster
+    fan.hass.states.get.side_effect = lambda eid: MagicMock(state="available") if eid == "infrared.living_blaster" else MagicMock(state="off")
     assert fan.available is False
 
-    # Attempting to send command while cut off raises HomeAssistantError
-    with pytest.raises(HomeAssistantError, match="cut off"):
+    # Attempting to send command while offline raises HomeAssistantError
+    with pytest.raises(HomeAssistantError, match="unavailable per"):
         await fan._send_ir_command("Power")
 
-    # Cutoff switch turns OFF (i.e. restored) -> triggers resync
+    # Smart plug turns ON (i.e. restored) -> triggers resync
     event = MagicMock(spec=Event)
     event.data = {
-        "entity_id": "input_boolean.fake_ir_cutoff",
-        "old_state": MagicMock(state="on"),
-        "new_state": MagicMock(state="off"),
+        "entity_id": "switch.smart_plug",
+        "old_state": MagicMock(state="off"),
+        "new_state": MagicMock(state="on"),
     }
     with patch.object(fan, "_async_trigger_reconnect_resync", new_callable=AsyncMock) as mock_resync:
         await fan._async_availability_state_changed(event)
