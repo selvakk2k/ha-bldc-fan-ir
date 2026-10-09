@@ -19,10 +19,12 @@
         "title": "Select IR Transmitter",
         "description": "Choose the IR Transmitter entity (infrared.* or remote.*) to send optical commands to **{name}**.",
         "data": {
-          "emitter_entity_id": "IR Transmitter Entity"
+          "emitter_entity_id": "IR Transmitter Entity",
+          "availability_entity_id": "Availability / Cutoff Entity (Optional)"
         },
         "data_description": {
-          "emitter_entity_id": "Entity ID of the IR blaster (infrared.* or remote.*)."
+          "emitter_entity_id": "Entity ID of the IR blaster (infrared.* or remote.*).",
+          "availability_entity_id": "Optional sensor, switch, or input boolean indicating IR transmitter power/availability (e.g. ping binary sensor or fake cutoff switch)."
         }
       }
     },
@@ -44,6 +46,7 @@
           "ir_format": "IR Format",
           "emitter_entity_id": "IR Transmitter Entity",
           "receiver_entity_id": "IR Receiver Entity (Optional)",
+          "availability_entity_id": "Availability / Cutoff Entity (Optional)",
           "power_switch": "Power Switch Entity (Optional)",
           "boot_delay": "Boot Delay (Seconds)"
         },
@@ -52,6 +55,7 @@
           "ir_format": "Change the IR signal encoding format.",
           "emitter_entity_id": "Entity ID of your IR blaster or remote.",
           "receiver_entity_id": "Optional infrared/remote entity receiving physical IR remote clicks for state synchronization.",
+          "availability_entity_id": "Optional sensor, switch, or input boolean indicating IR transmitter power/availability (e.g. ping binary sensor or fake cutoff switch).",
           "power_switch": "Optional smart plug or relay controlling mains power to the fan.",
           "boot_delay": "Grace period in seconds to wait for the fan receiver MCU to boot after turning on mains power."
         }

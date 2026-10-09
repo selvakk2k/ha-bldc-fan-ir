@@ -893,3 +893,136 @@ async def test_async_setup_entry_backend_backward_compatibility():
     assert added_entities2[0]._ir_format == IR_FORMAT_TUYA
 
 
+@pytest.mark.asyncio
+async def test_is_esphome_2026_10_or_newer_util():
+    """Test CalVer detection for ESPHome 2026.10+ firmware in utils."""
+    from custom_components.superfan_ir.utils import is_esphome_2026_10_or_newer
+
+    hass = MagicMock()
+    with patch("homeassistant.helpers.entity_registry.async_get") as mock_er, \
+         patch("homeassistant.helpers.device_registry.async_get") as mock_dr:
+        
+        mock_ent = MagicMock()
+        mock_ent.device_id = "device_123"
+        mock_ent.platform = "esphome"
+        mock_er.return_value.async_get.return_value = mock_ent
+
+        mock_dev = MagicMock()
+        mock_dr.return_value.async_get.return_value = mock_dev
+
+        # Test 2026.10.0
+        mock_dev.sw_version = "2026.10.0"
+        assert is_esphome_2026_10_or_newer(hass, "infrared.blaster") is True
+
+        # Test 2026.10.0b1 (Beta version)
+        mock_dev.sw_version = "2026.10.0b1"
+        assert is_esphome_2026_10_or_newer(hass, "infrared.blaster") is True
+
+        # Test 2026.11.0
+        mock_dev.sw_version = "2026.11.0"
+        assert is_esphome_2026_10_or_newer(hass, "infrared.blaster") is True
+
+        # Test 2027.1.0
+        mock_dev.sw_version = "2027.1.0"
+        assert is_esphome_2026_10_or_newer(hass, "infrared.blaster") is True
+
+        # Test 2026.9.1 (older)
+        mock_dev.sw_version = "2026.9.1"
+        assert is_esphome_2026_10_or_newer(hass, "infrared.blaster") is False
+
+        # Test 2025.12.4 (older year)
+        mock_dev.sw_version = "2025.12.4"
+        assert is_esphome_2026_10_or_newer(hass, "infrared.blaster") is False
+
+        # Test None / missing
+        mock_dev.sw_version = None
+        assert is_esphome_2026_10_or_newer(hass, "infrared.blaster") is False
+
+
+@pytest.mark.asyncio
+async def test_is_blaster_available_by_sensor_util():
+    """Test availability sensor evaluation and cutoff inversion logic in utils."""
+    from custom_components.superfan_ir.utils import is_blaster_available_by_sensor
+
+    # None / empty returns True
+    assert is_blaster_available_by_sensor(None, None) is True
+    assert is_blaster_available_by_sensor("on", None) is True
+    assert is_blaster_available_by_sensor(None, "binary_sensor.blaster") is True
+
+    # Fake cutoff switch (inversion logic: 'on' = cut off / unavailable, 'off' = available)
+    cutoff_id = "input_boolean.fake_ir_cutoff"
+    assert is_blaster_available_by_sensor("off", cutoff_id) is True
+    assert is_blaster_available_by_sensor("on", cutoff_id) is False
+    assert is_blaster_available_by_sensor("unavailable", cutoff_id) is False
+
+    # Standard ping / presence sensor (normal logic: 'on' = available, 'off' = unavailable)
+    ping_id = "binary_sensor.blaster_ping"
+    assert is_blaster_available_by_sensor("on", ping_id) is True
+    assert is_blaster_available_by_sensor("off", ping_id) is False
+    assert is_blaster_available_by_sensor("unavailable", ping_id) is False
+
+
+@pytest.mark.asyncio
+async def test_superfan_availability_entity_and_cutoff(mock_entry):
+    """Test that SuperfanEntity respects availability_entity_id and triggers reconnect resync."""
+    from homeassistant.exceptions import HomeAssistantError
+    from custom_components.superfan_ir.const import CONF_AVAILABILITY_ENTITY_ID
+
+    mock_entry.data[CONF_AVAILABILITY_ENTITY_ID] = "input_boolean.fake_ir_cutoff"
+    fan = SuperfanEntity(
+        entry=mock_entry,
+        fan_model=MODEL_T10,
+        backend=BACKEND_INFRARED,
+        emitter_id="infrared.living_blaster",
+    )
+    fan.entity_id = "fan.test_fan"
+    fan.hass = MagicMock()
+    fan.hass.states.get.side_effect = lambda eid: MagicMock(state="available") if eid == "infrared.living_blaster" else MagicMock(state="off")
+
+    assert fan.available is True
+
+    # Cut off blaster
+    fan.hass.states.get.side_effect = lambda eid: MagicMock(state="available") if eid == "infrared.living_blaster" else MagicMock(state="on")
+    assert fan.available is False
+
+    # Attempting to send command while cut off raises HomeAssistantError
+    with pytest.raises(HomeAssistantError, match="cut off"):
+        await fan._send_ir_command("Power")
+
+    # Cutoff switch turns OFF (i.e. restored) -> triggers resync
+    event = MagicMock(spec=Event)
+    event.data = {
+        "entity_id": "input_boolean.fake_ir_cutoff",
+        "old_state": MagicMock(state="on"),
+        "new_state": MagicMock(state="off"),
+    }
+    with patch.object(fan, "_async_trigger_reconnect_resync", new_callable=AsyncMock) as mock_resync:
+        await fan._async_availability_state_changed(event)
+        mock_resync.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_superfan_esphome_2026_10_timeout(mock_entry):
+    """Test that ESPHome 2026.10+ enforces 2.5s completion timeout and raises HomeAssistantError."""
+    import asyncio
+    from homeassistant.exceptions import HomeAssistantError
+
+    fan = SuperfanEntity(
+        entry=mock_entry,
+        fan_model=MODEL_T10,
+        backend=BACKEND_INFRARED,
+        emitter_id="infrared.living_blaster",
+    )
+    fan.entity_id = "fan.test_fan"
+    fan.hass = MagicMock()
+    fan.hass.states.get.return_value = MagicMock(state="available")
+
+    with patch("custom_components.superfan_ir.fan.is_esphome_2026_10_or_newer", return_value=True):
+        async def mock_timeout_call(*args, **kwargs):
+            raise asyncio.TimeoutError()
+
+        with patch("homeassistant.components.infrared.helpers.async_send_command", side_effect=mock_timeout_call):
+            with pytest.raises(HomeAssistantError, match="timed out"):
+                await fan._send_ir_command("Power")
+
+

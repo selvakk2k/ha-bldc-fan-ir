@@ -12,12 +12,13 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
 
 from .const import (
+    CONF_AVAILABILITY_ENTITY_ID,
     CONF_EMITTER_ENTITY_ID,
     CONF_FAN_MODEL,
     DOMAIN,
     MODEL_ATOMBERG,
 )
-from .utils import get_manufacturer
+from .utils import get_manufacturer, is_blaster_available_by_sensor
 
 
 async def async_setup_entry(
@@ -29,6 +30,9 @@ async def async_setup_entry(
     emitter_id = entry.options.get(
         CONF_EMITTER_ENTITY_ID, entry.data.get(CONF_EMITTER_ENTITY_ID)
     )
+    availability_id = entry.options.get(
+        CONF_AVAILABILITY_ENTITY_ID, entry.data.get(CONF_AVAILABILITY_ENTITY_ID)
+    )
     fan_model = entry.options.get(
         CONF_FAN_MODEL, entry.data.get(CONF_FAN_MODEL, MODEL_ATOMBERG)
     )
@@ -38,6 +42,7 @@ async def async_setup_entry(
             entry=entry,
             fan_model=fan_model,
             emitter_id=emitter_id,
+            availability_entity_id=availability_id,
         )
     ])
 
@@ -55,11 +60,13 @@ class SuperfanIRBlasterAvailableBinarySensor(BinarySensorEntity):
         entry: ConfigEntry,
         fan_model: str,
         emitter_id: str | None,
+        availability_entity_id: str | None = None,
     ) -> None:
         """Initialize binary sensor."""
         self._entry = entry
         self._model = fan_model
         self._emitter_id = emitter_id
+        self._availability_entity_id = availability_entity_id
         self._attr_unique_id = f"{entry.entry_id}_ir_blaster_available"
 
         self._attr_device_info = {
@@ -72,6 +79,10 @@ class SuperfanIRBlasterAvailableBinarySensor(BinarySensorEntity):
     @property
     def is_on(self) -> bool:
         """Return true if the IR blaster is online and available."""
+        if self._availability_entity_id and hasattr(self, "hass") and self.hass:
+            st = self.hass.states.get(self._availability_entity_id)
+            if st is not None and not is_blaster_available_by_sensor(st.state, self._availability_entity_id):
+                return False
         if not self._emitter_id:
             return False
         # ESPHome text/service names don't map to HA states directly, so assume True if set
@@ -87,6 +98,12 @@ class SuperfanIRBlasterAvailableBinarySensor(BinarySensorEntity):
             self.async_on_remove(
                 async_track_state_change_event(
                     self.hass, [self._emitter_id], self._async_emitter_changed
+                )
+            )
+        if self._availability_entity_id and "." in self._availability_entity_id:
+            self.async_on_remove(
+                async_track_state_change_event(
+                    self.hass, [self._availability_entity_id], self._async_emitter_changed
                 )
             )
 

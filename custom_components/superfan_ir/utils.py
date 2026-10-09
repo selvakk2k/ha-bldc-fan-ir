@@ -42,3 +42,51 @@ def get_manufacturer(model: str) -> str:
     if model == MODEL_GOLDMEDAL:
         return "Goldmedal Electricals"
     return "Versa Drives (Superfan)"
+
+
+def is_esphome_2026_10_or_newer(hass: Any, entity_id: str | None) -> bool:
+    """Check if the emitter entity is backed by ESPHome 2026.10+ firmware."""
+    if not entity_id or hass is None:
+        return False
+    try:
+        import re
+        import logging
+        from homeassistant.helpers import entity_registry as er, device_registry as dr
+
+        ent_reg = er.async_get(hass) if hasattr(er, "async_get") else None
+        dev_reg = dr.async_get(hass) if hasattr(dr, "async_get") else None
+        if not ent_reg or not dev_reg:
+            return False
+
+        entry = ent_reg.async_get(entity_id) if hasattr(ent_reg, "async_get") else None
+        if not entry or not getattr(entry, "device_id", None):
+            return False
+        if getattr(entry, "platform", None) != "esphome":
+            return False
+
+        device = dev_reg.async_get(entry.device_id) if hasattr(dev_reg, "async_get") else None
+        if not device or not getattr(device, "sw_version", None):
+            return False
+
+        match = re.match(r"^(\d+)\.(\d+)", str(device.sw_version).strip())
+        if match:
+            year, month = int(match.group(1)), int(match.group(2))
+            return (year, month) >= (2026, 10)
+    except Exception as err:
+        logging.getLogger(__name__).debug("Could not determine ESPHome firmware version for %s: %s", entity_id, err)
+    return False
+
+
+def is_blaster_available_by_sensor(state_val: Any, entity_id: str | None) -> bool:
+    """Determine if blaster is available based on an availability or cutoff sensor."""
+    if state_val is None or not entity_id:
+        return True
+    s = str(getattr(state_val, "state", state_val)).lower()
+    if s in ("unavailable", "unknown", "none", ""):
+        return False
+    if "cutoff" in entity_id.lower():
+        # Cutoff switch: ON = Cut off (unavailable), OFF = Connected/Normal (available)
+        return s not in ("on", "true", "1")
+    # Standard availability / ping / power sensor: ON = Available, OFF = Unavailable
+    return s in ("on", "home", "connected", "true", "1")
+

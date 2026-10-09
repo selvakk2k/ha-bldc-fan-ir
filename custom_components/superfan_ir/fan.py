@@ -13,10 +13,12 @@ from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.exceptions import HomeAssistantError
 
 from .const import (
     BACKEND_INFRARED,
     BACKEND_REMOTE,
+    CONF_AVAILABILITY_ENTITY_ID,
     CONF_BACKEND,
     CONF_BOOT_DELAY,
     CONF_EMITTER_ENTITY_ID,
@@ -44,7 +46,11 @@ from .const import (
     SPEED_MAP_3,
 )
 from .ir import SuperfanNEC
-from .utils import get_manufacturer
+from .utils import (
+    get_manufacturer,
+    is_blaster_available_by_sensor,
+    is_esphome_2026_10_or_newer,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -124,6 +130,9 @@ async def async_setup_entry(
     power_switch = entry.options.get(
         CONF_POWER_SWITCH, entry.data.get(CONF_POWER_SWITCH)
     )
+    availability_id = entry.options.get(
+        CONF_AVAILABILITY_ENTITY_ID, entry.data.get(CONF_AVAILABILITY_ENTITY_ID)
+    )
     boot_delay = float(
         entry.options.get(
             CONF_BOOT_DELAY,
@@ -139,6 +148,7 @@ async def async_setup_entry(
             emitter_id=emitter_id,
             receiver_id=receiver_id,
             power_switch=power_switch,
+            availability_entity_id=availability_id,
             boot_delay=boot_delay,
         )
     ])
@@ -166,6 +176,7 @@ class SuperfanEntity(FanEntity, RestoreEntity):
         power_switch: str | None = None,
         backend: str | None = None,
         boot_delay: float = DEFAULT_BOOT_DELAY,
+        availability_entity_id: str | None = None,
     ) -> None:
         """Initialize the fan."""
         self._entry = entry
@@ -174,7 +185,19 @@ class SuperfanEntity(FanEntity, RestoreEntity):
         self._emitter_id = emitter_id
         self._receiver_id = receiver_id
         self._power_switch = power_switch
+        self._availability_entity_id = (
+            availability_entity_id
+            or (
+                entry.options.get(
+                    CONF_AVAILABILITY_ENTITY_ID,
+                    entry.data.get(CONF_AVAILABILITY_ENTITY_ID) if hasattr(entry, "data") else None,
+                )
+                if hasattr(entry, "options")
+                else (entry.data.get(CONF_AVAILABILITY_ENTITY_ID) if hasattr(entry, "data") else None)
+            )
+        )
         self._boot_delay = boot_delay
+        self._ir_blaster_available_override: bool | None = None
 
         self._attr_unique_id = f"{entry.entry_id}_fan"
         self._attr_name = None
@@ -235,6 +258,12 @@ class SuperfanEntity(FanEntity, RestoreEntity):
         IR blaster emitter. If a power switch is configured, that power switch
         must also not be unavailable.
         """
+        if self._ir_blaster_available_override is False:
+            return False
+        if self._availability_entity_id and hasattr(self, "hass") and self.hass:
+            st = self.hass.states.get(self._availability_entity_id)
+            if st is not None and not is_blaster_available_by_sensor(st.state, self._availability_entity_id):
+                return False
         if self._emitter_id and hasattr(self, "hass") and self.hass:
             st = self.hass.states.get(self._emitter_id)
             if st is None or str(st.state).lower() in (STATE_UNAVAILABLE, STATE_UNKNOWN):
@@ -291,6 +320,13 @@ class SuperfanEntity(FanEntity, RestoreEntity):
             self.async_on_remove(
                 async_track_state_change_event(
                     self.hass, [self._receiver_id], self._async_receiver_event
+                )
+            )
+
+        if self._availability_entity_id:
+            self.async_on_remove(
+                async_track_state_change_event(
+                    self.hass, [self._availability_entity_id], self._async_availability_state_changed
                 )
             )
 
@@ -385,22 +421,8 @@ class SuperfanEntity(FanEntity, RestoreEntity):
         except Exception as err:
             _LOGGER.debug("Error processing IR receiver signal '%s': %s", raw_val, err)
 
-    async def _async_emitter_state_changed(self, event: Event) -> None:
-        """Handle IR blaster emitter availability changes."""
-        old_state = event.data.get("old_state")
-        new_state = event.data.get("new_state")
-        try:
-            self.async_write_ha_state()
-        except Exception:
-            pass
-
-        if new_state is None or new_state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-            return
-
-        # Trigger only on the edge transition from unavailable/unknown to available
-        if old_state is not None and old_state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-            return
-
+    async def _async_trigger_reconnect_resync(self) -> None:
+        """Resync pending state to blaster upon reconnection."""
         fan_name = self.name or (self._entry.title if hasattr(self, "_entry") and self._entry else "Fan")
         elapsed = time.monotonic() - self._last_command_time
         if (
@@ -434,6 +456,54 @@ class SuperfanEntity(FanEntity, RestoreEntity):
                 elapsed,
                 self._last_requested_action,
             )
+
+    async def _async_emitter_state_changed(self, event: Event) -> None:
+        """Handle IR blaster emitter availability changes."""
+        old_state = event.data.get("old_state")
+        new_state = event.data.get("new_state")
+        self._ir_blaster_available_override = None
+        try:
+            self.async_write_ha_state()
+        except Exception:
+            pass
+
+        if new_state is None or new_state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            return
+
+        # Trigger only on the edge transition from unavailable/unknown to available
+        if old_state is not None and old_state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            return
+
+        # Check availability sensor boundary if configured
+        if self._availability_entity_id and hasattr(self, "hass") and self.hass:
+            st = self.hass.states.get(self._availability_entity_id)
+            if st is not None and not is_blaster_available_by_sensor(st.state, self._availability_entity_id):
+                return
+
+        await self._async_trigger_reconnect_resync()
+
+    async def _async_availability_state_changed(self, event: Event) -> None:
+        """Handle availability or cutoff sensor state changes."""
+        old_state = event.data.get("old_state")
+        new_state = event.data.get("new_state")
+        old_raw = getattr(old_state, "state", None) if old_state else None
+        new_raw = getattr(new_state, "state", None) if new_state else None
+        was_avail = is_blaster_available_by_sensor(old_raw, self._availability_entity_id) if old_raw else False
+        is_avail = is_blaster_available_by_sensor(new_raw, self._availability_entity_id) if new_raw else False
+
+        self._ir_blaster_available_override = None
+        try:
+            self.async_write_ha_state()
+        except Exception:
+            pass
+
+        if is_avail and not was_avail:
+            # If emitter entity is also configured, ensure it is available in HA
+            if self._emitter_id and hasattr(self, "hass") and self.hass:
+                st = self.hass.states.get(self._emitter_id)
+                if st is not None and str(st.state).lower() in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+                    return
+            await self._async_trigger_reconnect_resync()
 
     def _map_speed_to_percentage(self, speed_key: str) -> int:
         if self._model in (MODEL_ATOMBERG, MODEL_ACTIVA):
@@ -513,6 +583,19 @@ class SuperfanEntity(FanEntity, RestoreEntity):
         if not emitter:
             _LOGGER.error("No emitter entity configured for %s", self.name)
             return False
+
+        if self._availability_entity_id and hasattr(self, "hass") and self.hass:
+            st = self.hass.states.get(self._availability_entity_id)
+            if st is not None and not is_blaster_available_by_sensor(st, self._availability_entity_id):
+                _LOGGER.warning(
+                    "[Superfan IR] Command '%s' blocked: IR transmitter %s is cut off by %s",
+                    code_key,
+                    emitter,
+                    self._availability_entity_id,
+                )
+                raise HomeAssistantError(
+                    f"IR transmitter {emitter} is cut off by {self._availability_entity_id}"
+                )
 
         self._notify_control_source("IR Blaster")
         try:
@@ -620,8 +703,42 @@ class SuperfanEntity(FanEntity, RestoreEntity):
 
                 raw_timings = SuperfanNEC.get_raw_timings(code_key, self._model)
                 command = RawIRCommand(raw_timings)
-                await async_send_command(self.hass, emitter, command)
+                if is_esphome_2026_10_or_newer(self.hass, emitter):
+                    _LOGGER.info(
+                        "Transmitting native IR via ESPHome 2026.10+ blaster %s with 2.5s completion timeout",
+                        emitter,
+                    )
+                    try:
+                        await asyncio.wait_for(
+                            async_send_command(self.hass, emitter, command),
+                            timeout=2.5,
+                        )
+                    except asyncio.TimeoutError:
+                        _LOGGER.warning(
+                            "ESPHome 2026.10+ IR blaster %s timed out after 2.5s waiting for transmit completion",
+                            emitter,
+                        )
+                        self._ir_blaster_available_override = False
+                        self.async_write_ha_state()
+                        raise HomeAssistantError(
+                            f"ESPHome 2026.10+ IR blaster {emitter} timed out after 2.5s waiting for transmit completion"
+                        )
+                    except Exception as err:
+                        _LOGGER.warning(
+                            "ESPHome 2026.10+ IR blaster %s transmit failed: %s",
+                            emitter,
+                            err,
+                        )
+                        self._ir_blaster_available_override = False
+                        self.async_write_ha_state()
+                        raise HomeAssistantError(
+                            f"ESPHome 2026.10+ IR blaster {emitter} transmit failed: {err}"
+                        )
+                else:
+                    await async_send_command(self.hass, emitter, command)
             return True
+        except HomeAssistantError:
+            raise
         except Exception as err:
             _LOGGER.error("Failed to dispatch IR command (%s) for %s: %s", code_key, self._model, err)
             return False

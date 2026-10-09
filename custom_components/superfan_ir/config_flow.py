@@ -14,6 +14,7 @@ from homeassistant.core import callback
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_AVAILABILITY_ENTITY_ID,
     CONF_BOOT_DELAY,
     CONF_EMITTER_ENTITY_ID,
     CONF_FAN_MODEL,
@@ -112,6 +113,9 @@ class SuperfanConfigFlow(ConfigFlow, domain=DOMAIN):
 
         data_schema = vol.Schema({
             vol.Required(CONF_EMITTER_ENTITY_ID): emitter_selector,
+            vol.Optional(CONF_AVAILABILITY_ENTITY_ID): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=["binary_sensor", "input_boolean", "switch"])
+            ),
         })
 
         return self.async_show_form(
@@ -162,6 +166,10 @@ class SuperfanOptionsFlow(OptionsFlow):
             CONF_POWER_SWITCH,
             self._config_entry.data.get(CONF_POWER_SWITCH, ""),
         )
+        current_avail = self._config_entry.options.get(
+            CONF_AVAILABILITY_ENTITY_ID,
+            self._config_entry.data.get(CONF_AVAILABILITY_ENTITY_ID, ""),
+        )
         current_boot_delay = float(
             self._config_entry.options.get(
                 CONF_BOOT_DELAY,
@@ -188,6 +196,9 @@ class SuperfanOptionsFlow(OptionsFlow):
             vol.Optional(CONF_RECEIVER_ENTITY_ID): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain=["infrared", "remote"])
             ),
+            vol.Optional(CONF_AVAILABILITY_ENTITY_ID): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=["binary_sensor", "input_boolean", "switch"])
+            ),
             vol.Optional(CONF_POWER_SWITCH): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="switch")
             ),
@@ -207,6 +218,7 @@ class SuperfanOptionsFlow(OptionsFlow):
             CONF_IR_FORMAT: current_fmt,
             CONF_EMITTER_ENTITY_ID: current_emitter,
             CONF_RECEIVER_ENTITY_ID: current_receiver,
+            CONF_AVAILABILITY_ENTITY_ID: current_avail,
             CONF_POWER_SWITCH: current_switch,
             CONF_BOOT_DELAY: current_boot_delay,
         }
