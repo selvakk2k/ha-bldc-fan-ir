@@ -483,7 +483,7 @@ class SuperfanEntity(FanEntity, RestoreEntity):
         await self._async_trigger_reconnect_resync()
 
     async def _async_availability_state_changed(self, event: Event) -> None:
-        """Handle availability or cutoff sensor state changes."""
+        """Handle availability entity state changes."""
         old_state = event.data.get("old_state")
         new_state = event.data.get("new_state")
         old_raw = getattr(old_state, "state", None) if old_state else None
