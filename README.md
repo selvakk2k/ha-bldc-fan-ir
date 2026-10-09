@@ -126,7 +126,8 @@ The integration automatically generates and encodes signals for all supported bl
    * **IR Format**: Select the signal encoding format expected by your blaster (`Auto-Detect`, `Home Assistant Infrared / ESPHome Raw`, `Broadlink Base64`, `Tuya Base64`, or `Tasmota / MQTT`).
 4. In **Step 2: Select IR Transmitter**:
    * **IR Transmitter Entity**: Select your `infrared.*` or `remote.*` blaster entity.
-5. *(Optional Options Flow)*: Click **Configure** on the fan card to adjust settings or bind an **IR Receiver Entity (Optional)** or **Power Switch Entity (Optional)**.
+   * **Availability / Cutoff Entity (Optional)**: Select an availability sensor (`binary_sensor`, `input_boolean`, or `switch`) to detect blaster outages immediately. If the entity ID contains `cutoff` (e.g. `input_boolean.fake_ir_cutoff`), its state is automatically inverted (`on` = cut off / offline, `off` = connected / online).
+5. *(Optional Options Flow)*: Click **Configure** on the fan card to adjust settings or bind an **IR Receiver Entity (Optional)**, **Power Switch Entity (Optional)**, or **Availability Entity (Optional)**.
 
 
 ---
@@ -158,6 +159,10 @@ infrared:
     receiver_frequency: 38kHz
     remote_receiver_id: ir_rx
 ```
+
+### ESPHome 2026.10+ Upgrade & Firmware Notes
+* **ESPHome 2026.10+ Upgrade (Recommended)**: For native `infrared` transmitters, upgrading the blaster to ESPHome `2026.10` or newer enables hardware transmit-complete acknowledgements. The integration automatically detects firmware 2026.10+ and applies an explicit 2.5-second completion timeout to command dispatch, immediately marking the entity offline if transmission fails.
+* **LibreTiny Buffer Size Change (PR #19101)**: If using Beken BK7231N (LibreTiny) or ESP8266 hardware with an explicit `buffer_size` configured under `remote_receiver:`, note that ESPHome 2026.10 measures buffer capacity in bytes rather than entry count. Multiply your existing `buffer_size` value by 4 (e.g. from `1000` to `4000`) when upgrading your YAML configuration to ESPHome 2026.10+. If `buffer_size` is omitted in your YAML, no change is needed.
 
 ---
 
