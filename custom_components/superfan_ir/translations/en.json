@@ -17,16 +17,18 @@
       },
       "emitter": {
         "title": "Select IR Transmitter",
-        "description": "Choose the IR Transmitter entity (infrared.* or remote.*) to send optical commands to **{name}**.",
+        "description": "Choose an IR Transmitter entity (infrared.* or remote.*) or configure an MQTT command topic (for Tasmota) to send optical commands to **{name}**.",
         "data": {
           "mqtt_topic": "MQTT Command Topic (Tasmota)",
           "emitter_entity_id": "IR Transmitter Entity",
-          "availability_entity_id": "Availability / Status Entity (Optional)"
+          "availability_entity_id": "Availability / Status Entity (Optional)",
+          "availability_topic": "MQTT Availability Topic (Optional)"
         },
         "data_description": {
           "mqtt_topic": "MQTT command topic to dispatch Tasmota IR payloads (e.g. cmnd/tasmota_ir/IRsend).",
           "emitter_entity_id": "Entity ID of the IR blaster (infrared.* or remote.*). Optional if using an MQTT topic.",
-          "availability_entity_id": "Optional smart plug, router device tracker, status sensor, or helper to monitor blaster availability."
+          "availability_entity_id": "Optional smart plug, router device tracker, status sensor, or helper to monitor blaster availability.",
+          "availability_topic": "Optional MQTT topic to monitor blaster availability (e.g. Tasmota LWT topic tele/tasmota_ir/LWT)."
         }
       }
     },
@@ -36,6 +38,7 @@
       "missing_tasmota_endpoint": "Please provide either an MQTT command topic or a remote entity.",
       "both_endpoints_provided": "Please configure either a remote entity or an MQTT topic, not both.",
       "invalid_mqtt_topic": "Invalid MQTT command topic. Topic must contain '/' and cannot contain '+' or '#' wildcards.",
+      "invalid_availability_topic": "Invalid MQTT availability topic. Topic must contain '/' and cannot contain '+' or '#' wildcards.",
       "invalid_emitter_entity": "A valid Home Assistant remote or infrared entity is required for this format.",
       "topic_not_supported_for_format": "Direct MQTT topics are only supported when IR format is set to Tasmota."
     },
@@ -47,7 +50,7 @@
     "step": {
       "init": {
         "title": "Configure Fan Options",
-        "description": "Adjust fan brand model, transmission format, transmitter entity, optional physical remote receiver, and smart switch power interlock.",
+        "description": "Adjust fan brand model, transmission format, transmitter entity or MQTT command topic, optional physical remote receiver, availability monitoring, and smart switch power interlock.",
         "data": {
           "fan_model": "Fan Brand & Remote Model",
           "ir_format": "IR Format",
@@ -55,6 +58,7 @@
           "emitter_entity_id": "IR Transmitter Entity",
           "receiver_entity_id": "IR Receiver Entity (Optional)",
           "availability_entity_id": "Availability / Status Entity (Optional)",
+          "availability_topic": "MQTT Availability Topic (Optional)",
           "power_switch": "Power Switch Entity (Optional)",
           "boot_delay": "Boot Delay (Seconds)"
         },
@@ -65,6 +69,7 @@
           "emitter_entity_id": "Entity ID of your IR blaster or remote.",
           "receiver_entity_id": "Optional infrared/remote entity receiving physical IR remote clicks for state synchronization.",
           "availability_entity_id": "Optional smart plug, router device tracker, status sensor, or helper to monitor blaster availability.",
+          "availability_topic": "Optional MQTT topic to monitor blaster availability (e.g. Tasmota LWT topic tele/tasmota_ir/LWT).",
           "power_switch": "Optional smart plug or relay controlling mains power to the fan.",
           "boot_delay": "Grace period in seconds to wait for the fan receiver MCU to boot after turning on mains power."
         }
@@ -74,6 +79,7 @@
       "missing_tasmota_endpoint": "Please provide either an MQTT command topic or a remote entity.",
       "both_endpoints_provided": "Please configure either a remote entity or an MQTT topic, not both.",
       "invalid_mqtt_topic": "Invalid MQTT command topic. Topic must contain '/' and cannot contain '+' or '#' wildcards.",
+      "invalid_availability_topic": "Invalid MQTT availability topic. Topic must contain '/' and cannot contain '+' or '#' wildcards.",
       "invalid_emitter_entity": "A valid Home Assistant remote or infrared entity is required for this format.",
       "topic_not_supported_for_format": "Direct MQTT topics are only supported when IR format is set to Tasmota."
     }

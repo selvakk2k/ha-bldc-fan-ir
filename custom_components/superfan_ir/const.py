@@ -9,10 +9,12 @@ CONF_EMITTER_ENTITY_ID = "emitter_entity_id"
 CONF_MQTT_TOPIC = "mqtt_topic"
 CONF_RECEIVER_ENTITY_ID = "receiver_entity_id"
 CONF_AVAILABILITY_ENTITY_ID = "availability_entity_id"
+CONF_AVAILABILITY_TOPIC = "availability_topic"
 CONF_POWER_SWITCH = "power_switch"
 CONF_BOOT_DELAY = "boot_delay"
 DEFAULT_BOOT_DELAY = 1.5
 DEFAULT_TASMOTA_TOPIC = "cmnd/tasmota_ir/IRsend"
+DEFAULT_TASMOTA_LWT_TOPIC = "tele/tasmota_ir/LWT"
 
 MODEL_T10 = "SuperfanT10"
 MODEL_T12_6 = "SuperfanT12/6"

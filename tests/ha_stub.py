@@ -356,6 +356,12 @@ def setup_ha_stubs():
     import homeassistant.components.mqtt.const as mqtt_const_mod
     mqtt_const_mod.MQTT_CONNECTION_STATE = "mqtt_connection_state"
     mqtt_mod.is_connected = lambda hass: True
+    mqtt_subscriptions = {}
+    async def _async_subscribe_stub(hass, topic, msg_callback, *args, **kwargs):
+        mqtt_subscriptions[topic] = msg_callback
+        return lambda: mqtt_subscriptions.pop(topic, None)
+    mqtt_mod.async_subscribe = _async_subscribe_stub
+    mqtt_mod.subscriptions = mqtt_subscriptions
 
 
     # Event helper stubs

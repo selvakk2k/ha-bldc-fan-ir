@@ -44,6 +44,8 @@ A Home Assistant custom integration for controlling Indian BLDC ceiling fans (At
 Transmit commands using any common smart IR blaster hardware without needing manual code learning:
 * **Native Home Assistant Infrared (`ir_rf_proxy` - Recommended):** Uses Home Assistant's native `infrared` platform to send microsecond timing arrays directly to ESPHome or native transmitter entities.
 * **Broadlink:** Transmits base64 Pronto-encoded packets via Broadlink RM4/RM mini remotes.
+* **Tuya Base64:** Sends packed little-endian uint16 base64 packets to Tuya-based Wi-Fi/Zigbee blasters (`remote.send_command`).
+* **Pronto Hex:** Sends universal 38kHz CCF hex strings to Global Caché, IRTrans, or other universal IR bridges (`remote.send_command`).
 * **Tasmota / MQTT (Beta / Experimental):** Dispatches formatted NEC JSON payloads (`{"Protocol": "NEC", "Bits": 32, "Data": "0x..."}`) directly via `mqtt.publish` to your Tasmota command topic (e.g. `cmnd/<device>/IRsend`), or via an existing Home Assistant `remote.*` entity. Transmits per-byte bit-reversed hex matching the `IRremoteESP8266` convention (unconfirmed on physical hardware; community test feedback welcome).
 
 ### 2. Smart Switch Power Management
@@ -121,13 +123,13 @@ The integration automatically generates and encodes signals for all supported bl
 3. In **Step 1: Indian BLDC Fan Setup (Optical IR)**:
    * **Fan Name**: Friendly name for this fan entity (e.g. *Living Room Fan*).
    * **Fan Brand & Remote Model**: Select your fan brand and remote model (e.g. *Atomberg BLDC*, *Superfan T10*, *Orient BLDC*).
-   * **IR Format**: Select the signal encoding format expected by your blaster (`Auto-Detect`, `Home Assistant Infrared / ESPHome Raw`, `Broadlink Base64`, `Tuya Base64`, or `Tasmota / MQTT`).
+   * **IR Format**: Select the signal encoding format expected by your blaster (`Auto-Detect`, `Home Assistant Infrared / ESPHome Raw`, `Broadlink Base64`, `Tuya Base64`, `Pronto Hex`, or `Tasmota / MQTT`).
 4. In **Step 2: Select IR Transmitter**:
    * **If using ESPHome / Broadlink / Tuya**: Select your `infrared.*` or `remote.*` blaster entity.
    * **If using Tasmota / MQTT**: Enter your MQTT command topic (e.g. `cmnd/tasmota_fan_ir/IRsend`) or select an existing `remote.*` entity if you configured an MQTT remote.
+   * **MQTT Availability Topic (Optional)**: For direct MQTT setups, specify your Tasmota device's LWT status topic (e.g. `tele/tasmota_fan_ir/LWT`). The integration subscribes directly to receive `Online`/`Offline` notifications and immediately marks blaster availability.
    * **Availability / Status Entity (Optional)**: Select an availability entity (`binary_sensor`, `input_boolean`, `switch`, or `device_tracker`, such as a smart plug, network router tracker, or helper) to detect blaster outages immediately without waiting for Home Assistant's default 90-120 second TCP timeout. Standard state values (`on`, `home`, `connected`) indicate the blaster is online and available; any other state marks it offline.
-     * **Tip for Tasmota MQTT users**: When using a direct MQTT command topic, configure your Tasmota device's LWT binary sensor (e.g. `binary_sensor.<device>_status`) as the Availability Entity. While the integration dynamically tracks broker connectivity via Home Assistant's MQTT connection signals, a dedicated LWT status sensor ensures that guarded command resync and blaster availability reflect physical device reachability rather than just broker status.
-5. *(Optional Options Flow)*: Click **Configure** on the fan card to adjust settings or bind an **IR Receiver Entity (Optional)**, **Power Switch Entity (Optional)**, or **Availability Entity (Optional)**.
+5. *(Optional Options Flow)*: Click **Configure** on the fan card to adjust settings or bind an **IR Receiver Entity (Optional)**, **Power Switch Entity (Optional)**, **MQTT Availability Topic (Optional)**, or **Availability Entity (Optional)**.
 
 
 ---

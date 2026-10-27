@@ -13,6 +13,7 @@ from homeassistant.helpers.event import async_track_state_change_event
 
 from .const import (
     CONF_AVAILABILITY_ENTITY_ID,
+    CONF_AVAILABILITY_TOPIC,
     CONF_EMITTER_ENTITY_ID,
     CONF_FAN_MODEL,
     DOMAIN,
@@ -38,6 +39,9 @@ async def async_setup_entry(
     availability_id = entry.options.get(
         CONF_AVAILABILITY_ENTITY_ID, entry.data.get(CONF_AVAILABILITY_ENTITY_ID)
     )
+    availability_topic = entry.options.get(
+        CONF_AVAILABILITY_TOPIC, entry.data.get(CONF_AVAILABILITY_TOPIC)
+    )
     fan_model = entry.options.get(
         CONF_FAN_MODEL, entry.data.get(CONF_FAN_MODEL, MODEL_ATOMBERG)
     )
@@ -48,6 +52,7 @@ async def async_setup_entry(
             fan_model=fan_model,
             emitter_id=emitter_id,
             availability_entity_id=availability_id,
+            availability_topic=availability_topic,
         )
     ])
 
@@ -66,12 +71,14 @@ class SuperfanIRBlasterAvailableBinarySensor(BinarySensorEntity):
         fan_model: str,
         emitter_id: str | None,
         availability_entity_id: str | None = None,
+        availability_topic: str | None = None,
     ) -> None:
         """Initialize binary sensor."""
         self._entry = entry
         self._model = fan_model
         self._emitter_id = emitter_id
         self._availability_entity_id = availability_entity_id
+        self._availability_topic = availability_topic
         self._attr_unique_id = f"{entry.entry_id}_ir_blaster_available"
 
         self._attr_device_info = {

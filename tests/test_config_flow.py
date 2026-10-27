@@ -264,3 +264,99 @@ async def test_options_flow_non_tasmota_rejects_topic():
     assert res["type"] == "form"
     assert res["errors"]["base"] == "topic_not_supported_for_format"
 
+
+@pytest.mark.asyncio
+async def test_config_flow_tasmota_with_availability_topic():
+    from custom_components.superfan_ir.const import (
+        CONF_AVAILABILITY_TOPIC,
+        CONF_MQTT_TOPIC,
+        IR_FORMAT_TASMOTA,
+    )
+
+    flow = SuperfanConfigFlow()
+    flow.hass = MagicMock()
+
+    await flow.async_step_user({
+        "name": "Tasmota Fan LWT",
+        CONF_FAN_MODEL: MODEL_ATOMBERG,
+        CONF_IR_FORMAT: IR_FORMAT_TASMOTA,
+    })
+
+    # Submit valid MQTT command and availability topics
+    res = await flow.async_step_emitter({
+        CONF_MQTT_TOPIC: "cmnd/tasmota_ir/IRsend",
+        CONF_AVAILABILITY_TOPIC: "tele/tasmota_ir/LWT",
+    })
+    assert res["type"] == "create_entry"
+    assert res["data"][CONF_EMITTER_ENTITY_ID] == "cmnd/tasmota_ir/IRsend"
+    assert res["data"][CONF_AVAILABILITY_TOPIC] == "tele/tasmota_ir/LWT"
+
+
+@pytest.mark.asyncio
+async def test_config_flow_tasmota_invalid_availability_topic():
+    from custom_components.superfan_ir.const import (
+        CONF_AVAILABILITY_TOPIC,
+        CONF_MQTT_TOPIC,
+        IR_FORMAT_TASMOTA,
+    )
+
+    flow = SuperfanConfigFlow()
+    flow.hass = MagicMock()
+
+    await flow.async_step_user({
+        "name": "Tasmota Fan Invalid LWT",
+        CONF_FAN_MODEL: MODEL_ATOMBERG,
+        CONF_IR_FORMAT: IR_FORMAT_TASMOTA,
+    })
+
+    # Wildcard in availability topic
+    res = await flow.async_step_emitter({
+        CONF_MQTT_TOPIC: "cmnd/tasmota_ir/IRsend",
+        CONF_AVAILABILITY_TOPIC: "tele/+/LWT",
+    })
+    assert res["type"] == "form"
+    assert res["errors"]["base"] == "invalid_availability_topic"
+
+
+@pytest.mark.asyncio
+async def test_options_flow_with_and_without_valid_availability_topic():
+    from custom_components.superfan_ir.const import (
+        CONF_AVAILABILITY_TOPIC,
+        CONF_MQTT_TOPIC,
+        IR_FORMAT_TASMOTA,
+    )
+
+    entry = MagicMock()
+    entry.data = {
+        "name": "Options LWT Fan",
+        CONF_FAN_MODEL: MODEL_ATOMBERG,
+        CONF_IR_FORMAT: IR_FORMAT_TASMOTA,
+        CONF_EMITTER_ENTITY_ID: "cmnd/tasmota_ir/IRsend",
+        CONF_AVAILABILITY_TOPIC: "tele/tasmota_ir/LWT",
+    }
+    entry.options = {}
+
+    flow = SuperfanOptionsFlow(entry)
+    flow.hass = MagicMock()
+
+    # Invalid availability topic
+    res_err = await flow.async_step_init({
+        CONF_FAN_MODEL: MODEL_ATOMBERG,
+        CONF_IR_FORMAT: IR_FORMAT_TASMOTA,
+        CONF_MQTT_TOPIC: "cmnd/tasmota_ir/IRsend",
+        CONF_AVAILABILITY_TOPIC: "invalid_no_slash",
+    })
+    assert res_err["type"] == "form"
+    assert res_err["errors"]["base"] == "invalid_availability_topic"
+
+    # Valid updated availability topic
+    res_ok = await flow.async_step_init({
+        CONF_FAN_MODEL: MODEL_ATOMBERG,
+        CONF_IR_FORMAT: IR_FORMAT_TASMOTA,
+        CONF_MQTT_TOPIC: "cmnd/tasmota_ir/IRsend",
+        CONF_AVAILABILITY_TOPIC: "tele/new_topic/LWT",
+    })
+    assert res_ok["type"] == "create_entry"
+    assert res_ok["data"][CONF_AVAILABILITY_TOPIC] == "tele/new_topic/LWT"
+
+

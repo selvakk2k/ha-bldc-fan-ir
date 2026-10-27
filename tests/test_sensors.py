@@ -139,3 +139,31 @@ async def test_binary_sensor_mqtt_topic_dispatcher(mock_entry):
         with patch.object(sensor, "async_write_ha_state") as mock_write:
             callback_arg(False)
             mock_write.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_binary_sensor_with_availability_topic(mock_entry):
+    """Test that binary sensor tracks availability when using an availability topic."""
+    from custom_components.superfan_ir.const import CONF_AVAILABILITY_TOPIC
+
+    mock_entry.data[CONF_AVAILABILITY_TOPIC] = "tele/tasmota_ir/LWT"
+    entry_data = SuperfanEntryData(mock_entry)
+    sensor = SuperfanIRBlasterAvailableBinarySensor(
+        entry=mock_entry,
+        fan_model=MODEL_ATOMBERG,
+        emitter_id="cmnd/tasmota_fan_ir/IRsend",
+        availability_topic="tele/tasmota_ir/LWT",
+    )
+    sensor.hass = MagicMock()
+    sensor.hass.data = {DOMAIN: {mock_entry.entry_id: entry_data}}
+
+    assert sensor.is_on is True
+
+    # Offline LWT message sets override to False
+    entry_data.set_blaster_override(False)
+    assert sensor.is_on is False
+
+    # Online LWT message restores to True
+    entry_data.set_blaster_override(True)
+    assert sensor.is_on is True
+

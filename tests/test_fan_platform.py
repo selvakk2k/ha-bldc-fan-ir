@@ -229,6 +229,34 @@ async def test_send_ir_command_auto_detect_broadlink(mock_entry):
 
 
 @pytest.mark.asyncio
+async def test_send_ir_command_pronto(mock_entry):
+    """Test that IR_FORMAT_PRONTO dispatches universal CCF Pronto hex via remote.send_command."""
+    from custom_components.superfan_ir.const import IR_FORMAT_PRONTO, MODEL_ACTIVA
+    from custom_components.superfan_ir.ir import SuperfanNEC
+
+    fan = SuperfanEntity(
+        entry=mock_entry,
+        fan_model=MODEL_ACTIVA,
+        emitter_id="remote.itach_blaster",
+        ir_format=IR_FORMAT_PRONTO,
+    )
+    fan.entity_id = "fan.test_activa"
+    fan.hass = MagicMock()
+    fan.hass.services.async_call = AsyncMock()
+
+    await fan._send_ir_command("Power")
+    fan.hass.services.async_call.assert_called_once()
+    domain, service, service_data = fan.hass.services.async_call.call_args[0]
+    assert domain == "remote"
+    assert service == "send_command"
+    assert service_data["entity_id"] == "remote.itach_blaster"
+    expected_pronto = SuperfanNEC.get_pronto_hex("Power", MODEL_ACTIVA)
+    assert service_data["command"][0] == expected_pronto
+    assert expected_pronto.startswith("0000 006D")
+
+
+
+@pytest.mark.asyncio
 async def test_send_ir_command_auto_detect_infrared(mock_entry):
     """Test that infrared emitters auto-detect to IR_FORMAT_RAW and dispatch via async_send_command."""
     import types
@@ -1128,5 +1156,85 @@ async def test_superfan_esphome_2026_10_timeout(mock_entry):
         with patch("homeassistant.components.infrared.helpers.async_send_command", side_effect=mock_timeout_call):
             with pytest.raises(HomeAssistantError, match="timed out"):
                 await fan._send_ir_command("Power")
+
+
+@pytest.mark.asyncio
+async def test_mqtt_availability_lwt_override_and_resync(mock_entry):
+    """Test that Tasmota LWT MQTT availability updates fan availability and triggers reconnect resync."""
+    from custom_components.superfan_ir.__init__ import SuperfanEntryData
+    from custom_components.superfan_ir.const import (
+        CONF_AVAILABILITY_TOPIC,
+        DOMAIN,
+        IR_FORMAT_TASMOTA,
+    )
+
+    mock_entry.data[CONF_AVAILABILITY_TOPIC] = "tele/tasmota_ir/LWT"
+    entry_data = SuperfanEntryData(mock_entry)
+
+    fan = SuperfanEntity(
+        entry=mock_entry,
+        fan_model=MODEL_ATOMBERG,
+        emitter_id="cmnd/tasmota_ir/IRsend",
+        ir_format=IR_FORMAT_TASMOTA,
+        availability_topic="tele/tasmota_ir/LWT",
+    )
+    fan.entity_id = "fan.tasmota_fan"
+    fan.hass = MagicMock()
+    fan.hass.data = {DOMAIN: {mock_entry.entry_id: entry_data}}
+    fan.async_get_last_state = AsyncMock(return_value=None)
+
+    await fan.async_added_to_hass()
+
+    # Initial state is available
+    assert fan.available is True
+
+    # Offline LWT message sets override to False -> fan becomes unavailable
+    entry_data.set_blaster_override(False)
+    assert fan.available is False
+
+    # Online LWT message sets override to True -> fan becomes available and schedules resync
+    with patch.object(fan, "_async_trigger_reconnect_resync", new_callable=AsyncMock) as mock_resync:
+        entry_data.set_blaster_override(True)
+        assert fan.available is True
+        # Verify reconnect resync was scheduled via async_create_task
+        assert fan.hass.async_create_task.called
+        for call in fan.hass.async_create_task.call_args_list:
+            coro = call[0][0]
+            coro.close()
+
+
+@pytest.mark.asyncio
+async def test_async_setup_entry_subscribes_availability_topic(mock_entry):
+    """Test that async_setup_entry subscribes to availability_topic and toggles override."""
+    import homeassistant.components.mqtt as mqtt_mod
+    from custom_components.superfan_ir import async_setup_entry
+    from custom_components.superfan_ir.const import CONF_AVAILABILITY_TOPIC, DOMAIN
+
+    mock_entry.data[CONF_AVAILABILITY_TOPIC] = "tele/living_tasmota/LWT"
+
+    hass = MagicMock()
+    hass.data = {}
+    hass.config_entries.async_forward_entry_setups = AsyncMock(return_value=True)
+
+    await async_setup_entry(hass, mock_entry)
+
+    assert "tele/living_tasmota/LWT" in mqtt_mod.subscriptions
+    callback_fn = mqtt_mod.subscriptions["tele/living_tasmota/LWT"]
+
+    entry_data = hass.data[DOMAIN][mock_entry.entry_id]
+    assert entry_data.ir_blaster_available_override is True
+
+    # Simulate Offline MQTT message
+    msg_offline = MagicMock()
+    msg_offline.payload = "Offline"
+    callback_fn(msg_offline)
+    assert entry_data.ir_blaster_available_override is False
+
+    # Simulate Online MQTT message
+    msg_online = MagicMock()
+    msg_online.payload = "Online"
+    callback_fn(msg_online)
+    assert entry_data.ir_blaster_available_override is True
+
 
 

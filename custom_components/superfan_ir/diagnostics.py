@@ -22,7 +22,13 @@ from .ir import (
     SuperfanNEC,
 )
 
-TO_REDACT = {"emitter_entity_id", "receiver_entity_id", "unique_id"}
+TO_REDACT = {
+    "emitter_entity_id",
+    "receiver_entity_id",
+    "unique_id",
+    "mqtt_topic",
+    "availability_topic",
+}
 
 
 async def async_get_config_entry_diagnostics(

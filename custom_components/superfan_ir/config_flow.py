@@ -15,6 +15,7 @@ from homeassistant.helpers import selector
 
 from .const import (
     CONF_AVAILABILITY_ENTITY_ID,
+    CONF_AVAILABILITY_TOPIC,
     CONF_BOOT_DELAY,
     CONF_EMITTER_ENTITY_ID,
     CONF_FAN_MODEL,
@@ -23,6 +24,7 @@ from .const import (
     CONF_POWER_SWITCH,
     CONF_RECEIVER_ENTITY_ID,
     DEFAULT_BOOT_DELAY,
+    DEFAULT_TASMOTA_LWT_TOPIC,
     DEFAULT_TASMOTA_TOPIC,
     DOMAIN,
     IR_FORMAT_AUTO,
@@ -117,14 +119,22 @@ class SuperfanConfigFlow(ConfigFlow, domain=DOMAIN):
             if ir_fmt == IR_FORMAT_TASMOTA:
                 mqtt_topic = (user_input.get(CONF_MQTT_TOPIC) or "").strip()
                 remote_entity = user_input.get(CONF_EMITTER_ENTITY_ID)
+                avail_topic = (user_input.get(CONF_AVAILABILITY_TOPIC) or "").strip()
+
                 if mqtt_topic and remote_entity:
                     errors["base"] = "both_endpoints_provided"
                 elif not mqtt_topic and not remote_entity:
                     errors["base"] = "missing_tasmota_endpoint"
                 elif mqtt_topic and not validate_mqtt_topic(mqtt_topic):
                     errors["base"] = "invalid_mqtt_topic"
+                elif avail_topic and not validate_mqtt_topic(avail_topic):
+                    errors["base"] = "invalid_availability_topic"
                 else:
                     clean_input[CONF_EMITTER_ENTITY_ID] = mqtt_topic if mqtt_topic else remote_entity
+                    if avail_topic:
+                        clean_input[CONF_AVAILABILITY_TOPIC] = avail_topic
+                    else:
+                        clean_input.pop(CONF_AVAILABILITY_TOPIC, None)
                     self.data.update(clean_input)
                     return self.async_create_entry(title=self.data["name"], data=self.data)
             else:
@@ -144,10 +154,14 @@ class SuperfanConfigFlow(ConfigFlow, domain=DOMAIN):
                 vol.Optional(CONF_AVAILABILITY_ENTITY_ID): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain=["binary_sensor", "input_boolean", "switch", "device_tracker"])
                 ),
+                vol.Optional(CONF_AVAILABILITY_TOPIC): selector.TextSelector(),
             })
             if hasattr(self, "add_suggested_values_to_schema"):
                 data_schema = self.add_suggested_values_to_schema(
-                    data_schema, {CONF_MQTT_TOPIC: DEFAULT_TASMOTA_TOPIC}
+                    data_schema, {
+                        CONF_MQTT_TOPIC: DEFAULT_TASMOTA_TOPIC,
+                        CONF_AVAILABILITY_TOPIC: DEFAULT_TASMOTA_LWT_TOPIC,
+                    }
                 )
         else:
             if ir_fmt in ("raw", "auto"):
@@ -197,8 +211,11 @@ class SuperfanOptionsFlow(OptionsFlow):
             fmt = clean_input.get(CONF_IR_FORMAT)
             mqtt_topic = (clean_input.get(CONF_MQTT_TOPIC) or "").strip()
             remote_ent = clean_input.get(CONF_EMITTER_ENTITY_ID)
+            avail_topic = (clean_input.get(CONF_AVAILABILITY_TOPIC) or "").strip()
 
-            if fmt == IR_FORMAT_TASMOTA:
+            if avail_topic and not validate_mqtt_topic(avail_topic):
+                errors["base"] = "invalid_availability_topic"
+            elif fmt == IR_FORMAT_TASMOTA:
                 if mqtt_topic and remote_ent:
                     errors["base"] = "both_endpoints_provided"
                 elif not mqtt_topic and not remote_ent:
@@ -207,6 +224,7 @@ class SuperfanOptionsFlow(OptionsFlow):
                     errors["base"] = "invalid_mqtt_topic"
                 else:
                     clean_input[CONF_EMITTER_ENTITY_ID] = mqtt_topic if mqtt_topic else remote_ent
+                    clean_input[CONF_AVAILABILITY_TOPIC] = avail_topic
                     return self.async_create_entry(title="", data=clean_input)
             else:
                 if mqtt_topic:
@@ -216,6 +234,7 @@ class SuperfanOptionsFlow(OptionsFlow):
                 else:
                     clean_input[CONF_EMITTER_ENTITY_ID] = remote_ent
                     clean_input[CONF_MQTT_TOPIC] = ""
+                    clean_input[CONF_AVAILABILITY_TOPIC] = avail_topic
                     return self.async_create_entry(title="", data=clean_input)
 
         current_model = self._config_entry.options.get(
@@ -249,6 +268,10 @@ class SuperfanOptionsFlow(OptionsFlow):
             CONF_AVAILABILITY_ENTITY_ID,
             self._config_entry.data.get(CONF_AVAILABILITY_ENTITY_ID, ""),
         )
+        current_avail_topic = self._config_entry.options.get(
+            CONF_AVAILABILITY_TOPIC,
+            self._config_entry.data.get(CONF_AVAILABILITY_TOPIC, ""),
+        )
         current_boot_delay = float(
             self._config_entry.options.get(
                 CONF_BOOT_DELAY,
@@ -279,6 +302,7 @@ class SuperfanOptionsFlow(OptionsFlow):
             vol.Optional(CONF_AVAILABILITY_ENTITY_ID): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain=["binary_sensor", "input_boolean", "switch", "device_tracker"])
             ),
+            vol.Optional(CONF_AVAILABILITY_TOPIC): selector.TextSelector(),
             vol.Optional(CONF_POWER_SWITCH): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="switch")
             ),
@@ -302,6 +326,7 @@ class SuperfanOptionsFlow(OptionsFlow):
             CONF_EMITTER_ENTITY_ID: current_emitter if not is_mqtt_topic(current_emitter) else None,
             CONF_RECEIVER_ENTITY_ID: current_receiver,
             CONF_AVAILABILITY_ENTITY_ID: current_avail,
+            CONF_AVAILABILITY_TOPIC: current_avail_topic,
             CONF_POWER_SWITCH: current_switch,
             CONF_BOOT_DELAY: current_boot_delay,
         }

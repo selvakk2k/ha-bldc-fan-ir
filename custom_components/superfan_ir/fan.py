@@ -20,6 +20,7 @@ from .const import (
     BACKEND_INFRARED,
     BACKEND_REMOTE,
     CONF_AVAILABILITY_ENTITY_ID,
+    CONF_AVAILABILITY_TOPIC,
     CONF_BACKEND,
     CONF_BOOT_DELAY,
     CONF_EMITTER_ENTITY_ID,
@@ -136,6 +137,9 @@ async def async_setup_entry(
     availability_id = entry.options.get(
         CONF_AVAILABILITY_ENTITY_ID, entry.data.get(CONF_AVAILABILITY_ENTITY_ID)
     )
+    availability_topic = entry.options.get(
+        CONF_AVAILABILITY_TOPIC, entry.data.get(CONF_AVAILABILITY_TOPIC)
+    )
     boot_delay = float(
         entry.options.get(
             CONF_BOOT_DELAY,
@@ -152,6 +156,7 @@ async def async_setup_entry(
             receiver_id=receiver_id,
             power_switch=power_switch,
             availability_entity_id=availability_id,
+            availability_topic=availability_topic,
             boot_delay=boot_delay,
         )
     ])
@@ -180,6 +185,7 @@ class SuperfanEntity(FanEntity, RestoreEntity):
         backend: str | None = None,
         boot_delay: float = DEFAULT_BOOT_DELAY,
         availability_entity_id: str | None = None,
+        availability_topic: str | None = None,
     ) -> None:
         """Initialize the fan."""
         self._entry = entry
@@ -199,8 +205,20 @@ class SuperfanEntity(FanEntity, RestoreEntity):
                 else (entry.data.get(CONF_AVAILABILITY_ENTITY_ID) if hasattr(entry, "data") else None)
             )
         )
+        self._availability_topic = (
+            availability_topic
+            or (
+                entry.options.get(
+                    CONF_AVAILABILITY_TOPIC,
+                    entry.data.get(CONF_AVAILABILITY_TOPIC) if hasattr(entry, "data") else None,
+                )
+                if hasattr(entry, "options")
+                else (entry.data.get(CONF_AVAILABILITY_TOPIC) if hasattr(entry, "data") else None)
+            )
+        )
         self._boot_delay = boot_delay
         self._ir_blaster_available_override: bool | None = None
+        self._previous_available: bool = True
 
         self._attr_unique_id = f"{entry.entry_id}_fan"
         self._attr_name = None
@@ -282,7 +300,7 @@ class SuperfanEntity(FanEntity, RestoreEntity):
         if hasattr(self, "hass") and self.hass:
             entry_data = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id)
             if entry_data and hasattr(entry_data, "add_listener"):
-                self.async_on_remove(entry_data.add_listener(self.async_write_ha_state))
+                self.async_on_remove(entry_data.add_listener(self._async_entry_data_changed))
 
         last_state = await self.async_get_last_state()
         if last_state:
@@ -554,6 +572,16 @@ class SuperfanEntity(FanEntity, RestoreEntity):
                 st = self.hass.states.get(self._availability_entity_id)
                 if st is not None and not is_blaster_available_by_sensor(st.state, self._availability_entity_id):
                     return
+            self.hass.async_create_task(self._async_trigger_reconnect_resync())
+
+    @callback
+    def _async_entry_data_changed(self) -> None:
+        """Handle entry data updates (such as blaster availability override)."""
+        was_avail = self._previous_available
+        self.async_write_ha_state()
+        now_avail = self.available
+        self._previous_available = now_avail
+        if not was_avail and now_avail:
             self.hass.async_create_task(self._async_trigger_reconnect_resync())
 
     def _map_speed_to_percentage(self, speed_key: str) -> int:
