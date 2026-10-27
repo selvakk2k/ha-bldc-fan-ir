@@ -2,11 +2,7 @@ import sys
 from pathlib import Path
 from enum import IntFlag
 
-# Set up Home Assistant mock stubs for local testing
-ha_miraie_ac = Path("d:/GitHub/ha-miraie-ac")
-if ha_miraie_ac.exists() and str(ha_miraie_ac) not in sys.path:
-    sys.path.insert(0, str(ha_miraie_ac))
-
+# Set up Home Assistant mock stubs for standalone testing
 from tests.ha_stub import setup_ha_stubs
 setup_ha_stubs()
 
@@ -47,7 +43,20 @@ class Entity:
     def async_on_remove(self, func):
         pass
 
+    async def async_added_to_hass(self):
+        pass
+
 homeassistant.helpers.entity.Entity = Entity
+
+import homeassistant.components.binary_sensor
+class BinarySensorEntity(Entity):
+    pass
+homeassistant.components.binary_sensor.BinarySensorEntity = BinarySensorEntity
+
+import homeassistant.components.sensor
+class SensorEntity(Entity):
+    pass
+homeassistant.components.sensor.SensorEntity = SensorEntity
 
 import homeassistant.components.fan
 homeassistant.components.fan.FanEntityFeature = FanEntityFeature
@@ -88,21 +97,6 @@ class RestoreEntity(Entity):
 
 homeassistant.helpers.restore_state.RestoreEntity = RestoreEntity
 
-import homeassistant.helpers.selector
-if hasattr(homeassistant.helpers.selector, "NumberSelectorMode"):
-    setattr(homeassistant.helpers.selector.NumberSelectorMode, "SLIDER", "slider")
-    setattr(homeassistant.helpers.selector.NumberSelectorMode, "BOX", "box")
-
-class NumberSelectorConfig:
-    def __init__(self, *args, **kwargs):
-        pass
-homeassistant.helpers.selector.NumberSelectorConfig = NumberSelectorConfig
-
-class NumberSelector:
-    def __init__(self, *args, **kwargs):
-        pass
-homeassistant.helpers.selector.NumberSelector = NumberSelector
-
 import homeassistant.config_entries
 class OptionsFlow:
     def add_suggested_values_to_schema(self, schema, suggested):
@@ -117,6 +111,9 @@ class ConfigFlow:
     def __init_subclass__(cls, domain=None, **kwargs):
         super().__init_subclass__(**kwargs)
         cls._domain = domain
+
+    def add_suggested_values_to_schema(self, schema, suggested):
+        return schema
 
     def async_show_form(self, step_id, data_schema, errors=None, description_placeholders=None):
         return {"type": "form", "step_id": step_id, "data_schema": data_schema, "errors": errors}

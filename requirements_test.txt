@@ -1,4 +1,5 @@
 pytest>=9.0.0
 pytest-asyncio>=1.4.0
 pytest-homeassistant-custom-component>=0.13.356
+pytest-timeout>=2.2.0
 voluptuous

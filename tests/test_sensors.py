@@ -90,3 +90,52 @@ def test_device_info_manufacturer_resolution(mock_entry):
     # Verify binary sensor device_info uses get_manufacturer
     binary_sensor = SuperfanIRBlasterAvailableBinarySensor(mock_entry, MODEL_GOLDMEDAL, "remote.blaster")
     assert binary_sensor._attr_device_info["manufacturer"] == "Goldmedal Electricals"
+
+
+@pytest.mark.asyncio
+async def test_binary_sensor_reflects_shared_override(mock_entry):
+    sensor = SuperfanIRBlasterAvailableBinarySensor(
+        entry=mock_entry,
+        fan_model=MODEL_ATOMBERG,
+        emitter_id="infrared.blaster",
+    )
+    sensor.hass = MagicMock()
+    entry_data = SuperfanEntryData(mock_entry)
+    sensor.hass.data = {DOMAIN: {mock_entry.entry_id: entry_data}}
+
+    blaster_state = MagicMock(state="idle")
+    sensor.hass.states.get.return_value = blaster_state
+    assert sensor.is_on is True
+
+    # When override is set to False (e.g. ESPHome timeout), binary sensor turns False
+    entry_data.set_blaster_override(False)
+    assert sensor.is_on is False
+
+    # When override is restored to True, binary sensor turns True
+    entry_data.set_blaster_override(True)
+    assert sensor.is_on is True
+
+
+@pytest.mark.asyncio
+async def test_binary_sensor_mqtt_topic_dispatcher(mock_entry):
+    """Test that binary sensor registers MQTT_CONNECTION_STATE dispatcher for topics."""
+    from unittest.mock import patch
+
+    sensor = SuperfanIRBlasterAvailableBinarySensor(
+        entry=mock_entry,
+        fan_model=MODEL_ATOMBERG,
+        emitter_id="cmnd/tasmota_fan_ir/IRsend",
+    )
+    sensor.hass = MagicMock()
+    sensor.hass.data = {DOMAIN: {mock_entry.entry_id: SuperfanEntryData(mock_entry)}}
+
+    with patch("homeassistant.helpers.dispatcher.async_dispatcher_connect") as mock_dispatch:
+        await sensor.async_added_to_hass()
+        mock_dispatch.assert_called_once()
+        signal_arg = mock_dispatch.call_args[0][1]
+        assert signal_arg == "mqtt_connection_state"
+        callback_arg = mock_dispatch.call_args[0][2]
+
+        with patch.object(sensor, "async_write_ha_state") as mock_write:
+            callback_arg(False)
+            mock_write.assert_called_once()

@@ -821,6 +821,110 @@ async def test_send_ir_command_auto_detect_entity_registry_tasmota(mock_entry):
 
 
 @pytest.mark.asyncio
+async def test_send_ir_command_tasmota_mqtt_topic(mock_entry):
+    """Test that Tasmota format with an MQTT topic dispatches via mqtt.publish with full JSON payload."""
+    import json
+    from custom_components.superfan_ir.const import IR_FORMAT_TASMOTA
+    from custom_components.superfan_ir.ir import SuperfanNEC
+
+    fan = SuperfanEntity(
+        entry=mock_entry,
+        fan_model=MODEL_ATOMBERG,
+        emitter_id="cmnd/tasmota_fan_ir/IRsend",
+        ir_format=IR_FORMAT_TASMOTA,
+    )
+    fan.entity_id = "fan.atomberg_fan"
+    fan.hass = MagicMock()
+    fan.hass.services.has_service.return_value = True
+    fan.hass.services.async_call = AsyncMock()
+    fan.hass.states.get.return_value = None
+
+    # Availability must be True even if states.get returns None for MQTT topic
+    assert fan.available is True
+
+    await fan._send_ir_command("1")
+
+    fan.hass.services.async_call.assert_called_once()
+    domain, service, service_data = fan.hass.services.async_call.call_args[0]
+    kwargs = fan.hass.services.async_call.call_args[1]
+
+    assert domain == "mqtt"
+    assert service == "publish"
+    assert service_data["topic"] == "cmnd/tasmota_fan_ir/IRsend"
+
+    expected_payload = SuperfanNEC.get_tasmota_payload("1", MODEL_ATOMBERG)
+    assert json.loads(service_data["payload"]) == expected_payload
+    assert kwargs.get("blocking") is True
+
+
+@pytest.mark.asyncio
+async def test_send_ir_command_tasmota_missing_mqtt_service_raises(mock_entry):
+    """Test that missing mqtt.publish service raises HomeAssistantError."""
+    from custom_components.superfan_ir.const import IR_FORMAT_TASMOTA
+    from homeassistant.exceptions import HomeAssistantError
+
+    fan = SuperfanEntity(
+        entry=mock_entry,
+        fan_model=MODEL_ATOMBERG,
+        emitter_id="cmnd/tasmota_fan_ir/IRsend",
+        ir_format=IR_FORMAT_TASMOTA,
+    )
+    fan.entity_id = "fan.atomberg_fan"
+    fan.hass = MagicMock()
+    fan.hass.services.has_service.return_value = False
+
+    with pytest.raises(HomeAssistantError, match="MQTT service 'mqtt.publish' is not available"):
+        await fan._send_ir_command("1")
+
+
+@pytest.mark.asyncio
+async def test_async_added_to_hass_skips_mqtt_topic_listeners(mock_entry):
+    """Test that async_added_to_hass does not register state change listeners for MQTT topics."""
+    from custom_components.superfan_ir.const import IR_FORMAT_TASMOTA
+
+    fan = SuperfanEntity(
+        entry=mock_entry,
+        fan_model=MODEL_ATOMBERG,
+        emitter_id="cmnd/tasmota_fan_ir/IRsend",
+        ir_format=IR_FORMAT_TASMOTA,
+    )
+    fan.entity_id = "fan.atomberg_fan"
+    fan.hass = MagicMock()
+    fan.async_get_last_state = AsyncMock(return_value=None)
+
+    with patch("custom_components.superfan_ir.fan.async_track_state_change_event") as mock_track:
+        await fan.async_added_to_hass()
+        mock_track.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_async_added_to_hass_registers_mqtt_connection_listener(mock_entry):
+    """Test that fan registers MQTT_CONNECTION_STATE dispatcher and handles updates."""
+    from custom_components.superfan_ir.const import IR_FORMAT_TASMOTA
+
+    fan = SuperfanEntity(
+        entry=mock_entry,
+        fan_model=MODEL_ATOMBERG,
+        emitter_id="cmnd/tasmota_fan_ir/IRsend",
+        ir_format=IR_FORMAT_TASMOTA,
+    )
+    fan.entity_id = "fan.atomberg_fan"
+    fan.hass = MagicMock()
+    fan.async_get_last_state = AsyncMock(return_value=None)
+
+    with patch("homeassistant.helpers.dispatcher.async_dispatcher_connect") as mock_dispatch:
+        await fan.async_added_to_hass()
+        mock_dispatch.assert_called_once()
+        signal_arg = mock_dispatch.call_args[0][1]
+        assert signal_arg == "mqtt_connection_state"
+        callback_arg = mock_dispatch.call_args[0][2]
+
+        with patch.object(fan, "async_write_ha_state") as mock_write:
+            callback_arg(False)
+            mock_write.assert_called_once()
+
+
+@pytest.mark.asyncio
 async def test_configurable_boot_delay(mock_entry):
     """Test that configured boot delay is honored when turning on power switch."""
     fan = SuperfanEntity(

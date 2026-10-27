@@ -1,18 +1,18 @@
 """Multi-Brand 32-Bit NEC Infrared Protocol Engine for Indian BLDC Ceiling Fans.
 
-Hardware-Verified 38kHz NEC Carrier Protocols:
-- Superfan (T10 & T12/6): 16-bit address 0x00DF
-- Atomberg (Renesa, Efficio, Aris, Studio): 16-bit address 0xF300
-- Activa (Gracia, Energia, Apsara Series): 16-bit address 0x5AA5
-- Orient Electric (I-Tome, Aeroslim, Wendy, Ecotech): 16-bit address 0x6B94
-- Goldmedal (Opus Prime, Winzo, Spacio, Aura Lux): 16-bit address 0x5A95
+Supported 38kHz NEC Carrier Protocols:
+- Superfan (T10 & T12/6): 16-bit address 0x00DF (Hardware-Verified)
+- Atomberg (Renesa, Efficio, Aris, Studio): 16-bit address 0x00F3 (SmartIR-Sourced)
+- Activa (Gracia, Energia, Apsara Series): 16-bit address 0x5AA5 (App/Vendor-Sourced)
+- Orient Electric (I-Tome, Aeroslim, Wendy, Ecotech): 16-bit address 0x6B94 (App/Vendor-Sourced)
+- Goldmedal (Opus Prime, Winzo, Spacio, Aura Lux): 16-bit address 0x5A95 (App/Vendor-Sourced)
 
 Transports Supported:
 - Home Assistant Native Infrared (Raw duration microsecond arrays via infrared.*)
 - Broadlink Base64 (0x26 packet format)
 - Tuya Base64 (little-endian uint16 byte stream)
 - Pronto Hex (Universal CCF 0000 006D format)
-- Tasmota MQTT JSON (NEC 32-bit hex)
+- Tasmota MQTT JSON (NEC 32-bit hex with per-byte bit reversal for IRremoteESP8266)
 """
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ NEC_ZERO_SPACE = 560
 NEC_RPT_SPACE = 2250
 
 SUPERFAN_ADDRESS = 0x00DF
-ATOMBERG_ADDRESS = 0xF300
+ATOMBERG_ADDRESS = 0x00F3
 ACTIVA_ADDRESS = 0x5AA5
 ORIENT_ADDRESS = 0x6B94
 GOLDMEDAL_ADDRESS = 0x5A95
@@ -267,14 +267,29 @@ class SuperfanNEC:
         return SUPERFAN_COMMAND_BYTES[command_name]
 
     @classmethod
-    def get_raw_timings(cls, command_name: str, model: str | None = None, repeats: int = 2) -> list[int]:
-        """Generate alternating microsecond durations [pulse, space, ...] for Home Assistant RawIRCommand with repeated NEC frames."""
+    def get_bytes_to_send(cls, command_name: str, model: str | None = None) -> list[int]:
+        """Return the 4 NEC frame bytes [Addr0, Addr1, Cmd0, Cmd1] for the given model."""
         cmd_byte = cls.get_command_byte(command_name, model)
         addr = cls.get_address(model)
         inv_cmd = (~cmd_byte) & 0xFF
 
-        # Transmit big-endian address bytes [Addr0, Addr1], then Command, then ~Command
-        bytes_to_send = [(addr >> 8) & 0xFF, addr & 0xFF, cmd_byte, inv_cmd]
+        if model == MODEL_ATOMBERG or model == "Atomberg":
+            # Hardware verified (SmartIR 1160/1170 & physical remotes):
+            # Atomberg sends address [0x00, 0xF3] and [inv_cmd, cmd_byte]
+            return [0x00, 0xF3, inv_cmd, cmd_byte]
+
+        return [(addr >> 8) & 0xFF, addr & 0xFF, cmd_byte, inv_cmd]
+
+    @classmethod
+    def get_raw_timings(
+        cls,
+        command_name: str,
+        model: str | None = None,
+        repeats: int = 2,
+        include_repeat_frame: bool = True,
+    ) -> list[int]:
+        """Generate alternating microsecond durations [pulse, space, ...] for Home Assistant RawIRCommand with repeated NEC frames."""
+        bytes_to_send = cls.get_bytes_to_send(command_name, model)
         timings: list[int] = []
 
         for rep in range(max(1, repeats)):
@@ -289,8 +304,9 @@ class SuperfanNEC:
             timings.append(NEC_BIT_MARK)
             timings.append(42000 if rep < repeats - 1 else 30000)
 
-        # NEC Repeat Frame (required for hardware receiver filtering on Superfan & Atomberg ICs)
-        timings.extend([NEC_HDR_MARK, NEC_RPT_SPACE, NEC_BIT_MARK, 30000])
+        if include_repeat_frame:
+            # NEC Repeat Frame (required for hardware receiver filtering on Superfan & Atomberg ICs)
+            timings.extend([NEC_HDR_MARK, NEC_RPT_SPACE, NEC_BIT_MARK, 30000])
         return timings
 
     @classmethod
@@ -305,7 +321,8 @@ class SuperfanNEC:
     @classmethod
     def get_broadlink_base64(cls, command_name: str, model: str | None = None) -> str:
         """Generate Broadlink-compatible base64 IR payload (0x26 packet)."""
-        timings = cls.get_raw_timings(command_name, model)
+        # Emits 1 full NEC frame followed by the hardware repeat frame (72 transitions)
+        timings = cls.get_raw_timings(command_name, model, repeats=1, include_repeat_frame=True)
         payload = bytearray()
         for t in timings:
             ticks = int(round(t / 30.5))
@@ -324,7 +341,7 @@ class SuperfanNEC:
     @classmethod
     def get_pronto_hex(cls, command_name: str, model: str | None = None, freq: int = 38000) -> str:
         """Generate Pronto Hex (CCF) format string."""
-        timings = cls.get_raw_timings(command_name, model)
+        timings = cls.get_raw_timings(command_name, model, repeats=1, include_repeat_frame=True)
         timebase = 1000000.0 / freq
         pairs = len(timings) // 2
         words = [0x0000, 0x006D, pairs, 0x0000]
@@ -333,15 +350,23 @@ class SuperfanNEC:
             words.append(min(cycles, 0xFFFF))
         return " ".join(f"{w:04X}" for w in words)
 
-
+    @staticmethod
+    def reverse_byte_bits(byte: int) -> int:
+        """Reverse 8 bits of a byte (e.g. 0b10000000 -> 0b00000001)."""
+        b = byte & 0xFF
+        b = ((b & 0xF0) >> 4) | ((b & 0x0F) << 4)
+        b = ((b & 0xCC) >> 2) | ((b & 0x33) << 2)
+        b = ((b & 0xAA) >> 1) | ((b & 0x55) << 1)
+        return b
 
     @classmethod
     def get_tasmota_payload(cls, command_name: str, model: str | None = None) -> dict[str, Any]:
-        """Generate Tasmota IR MQTT JSON payload."""
-        cmd_byte = cls.get_command_byte(command_name, model)
-        addr = cls.get_address(model)
-        inv_cmd = (~cmd_byte) & 0xFF
-        nec_hex = f"0x{addr:04X}{cmd_byte:02X}{inv_cmd:02X}"
+        """Generate Tasmota IR MQTT JSON payload with per-byte bit-reversed hex for IRremoteESP8266."""
+        bytes_to_send = cls.get_bytes_to_send(command_name, model)
+        # Tasmota IRsend (IRremoteESP8266) transmits MSB-first, while physical NEC
+        # protocol is LSB-first on the wire. Each byte must have its bits reversed.
+        tasmota_bytes = [cls.reverse_byte_bits(b) for b in bytes_to_send]
+        nec_hex = f"0x{tasmota_bytes[0]:02X}{tasmota_bytes[1]:02X}{tasmota_bytes[2]:02X}{tasmota_bytes[3]:02X}"
         return {
             "Protocol": "NEC",
             "Bits": 32,
@@ -353,8 +378,8 @@ class SuperfanNEC:
         """Decode received NEC address and command byte into action."""
         if address in (SUPERFAN_ADDRESS, 0xDF00):
             return SUPERFAN_BYTE_TO_COMMAND.get(command)
-        if address in (ATOMBERG_ADDRESS, 0x00F3):
-            return ATOMBERG_BYTE_TO_COMMAND.get(command)
+        if address in (ATOMBERG_ADDRESS, 0x00F3, 0xF300):
+            return ATOMBERG_BYTE_TO_COMMAND.get(command) or ATOMBERG_BYTE_TO_COMMAND.get((~command) & 0xFF)
         if address in (ACTIVA_ADDRESS, 0xA55A):
             return ACTIVA_BYTE_TO_COMMAND.get(command)
         if address in (ORIENT_ADDRESS, 0x946B):

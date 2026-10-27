@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 from typing import Any
@@ -47,9 +48,11 @@ from .const import (
 )
 from .ir import SuperfanNEC
 from .utils import (
+    emitter_available,
     get_manufacturer,
     is_blaster_available_by_sensor,
     is_esphome_2026_10_or_newer,
+    is_mqtt_topic,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -258,16 +261,15 @@ class SuperfanEntity(FanEntity, RestoreEntity):
         IR blaster emitter. If a power switch is configured, that power switch
         must also not be unavailable.
         """
-        if self._ir_blaster_available_override is False:
+        entry_data = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id) if hasattr(self, "hass") and self.hass else None
+        blaster_override = entry_data.ir_blaster_available_override if entry_data else (self._ir_blaster_available_override is not False)
+        if not emitter_available(
+            self.hass if hasattr(self, "hass") else None,
+            self._emitter_id,
+            self._availability_entity_id,
+            blaster_override=blaster_override,
+        ):
             return False
-        if self._availability_entity_id and hasattr(self, "hass") and self.hass:
-            st = self.hass.states.get(self._availability_entity_id)
-            if st is not None and not is_blaster_available_by_sensor(st.state, self._availability_entity_id):
-                return False
-        if self._emitter_id and hasattr(self, "hass") and self.hass:
-            st = self.hass.states.get(self._emitter_id)
-            if st is None or str(st.state).lower() in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-                return False
         if self._power_switch and hasattr(self, "hass") and self.hass:
             st = self.hass.states.get(self._power_switch)
             if st is not None and str(st.state).lower() in (STATE_UNAVAILABLE, STATE_UNKNOWN):
@@ -277,6 +279,10 @@ class SuperfanEntity(FanEntity, RestoreEntity):
     async def async_added_to_hass(self) -> None:
         """Restore state and register event listeners."""
         await super().async_added_to_hass()
+        if hasattr(self, "hass") and self.hass:
+            entry_data = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id)
+            if entry_data and hasattr(entry_data, "add_listener"):
+                self.async_on_remove(entry_data.add_listener(self.async_write_ha_state))
 
         last_state = await self.async_get_last_state()
         if last_state:
@@ -293,21 +299,36 @@ class SuperfanEntity(FanEntity, RestoreEntity):
                 self._attr_preset_mode = None
 
         if self._emitter_id:
-            from homeassistant.helpers import entity_registry as er
+            if is_mqtt_topic(self._emitter_id):
+                try:
+                    from homeassistant.components.mqtt.const import MQTT_CONNECTION_STATE
+                except ImportError:
+                    MQTT_CONNECTION_STATE = "mqtt_connection_state"
+                from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
-            ent_reg = er.async_get(self.hass)
-            entry = ent_reg.async_get(self._emitter_id)
-            self._is_esphome = (
-                (entry is not None and entry.platform == "esphome")
-                or self._emitter_id.startswith("infrared.")
-                or self._emitter_id.startswith("esphome.")
-            )
-
-            self.async_on_remove(
-                async_track_state_change_event(
-                    self.hass, [self._emitter_id], self._async_emitter_state_changed
+                self.async_on_remove(
+                    async_dispatcher_connect(
+                        self.hass,
+                        MQTT_CONNECTION_STATE,
+                        self._async_mqtt_connection_changed,
+                    )
                 )
-            )
+            else:
+                from homeassistant.helpers import entity_registry as er
+
+                ent_reg = er.async_get(self.hass)
+                entry = ent_reg.async_get(self._emitter_id)
+                self._is_esphome = (
+                    (entry is not None and entry.platform == "esphome")
+                    or self._emitter_id.startswith("infrared.")
+                    or self._emitter_id.startswith("esphome.")
+                )
+
+                self.async_on_remove(
+                    async_track_state_change_event(
+                        self.hass, [self._emitter_id], self._async_emitter_state_changed
+                    )
+                )
 
         if self._power_switch:
             self.async_on_remove(
@@ -462,6 +483,9 @@ class SuperfanEntity(FanEntity, RestoreEntity):
         old_state = event.data.get("old_state")
         new_state = event.data.get("new_state")
         self._ir_blaster_available_override = None
+        entry_data = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id) if hasattr(self, "hass") and self.hass else None
+        if entry_data and hasattr(entry_data, "set_blaster_override"):
+            entry_data.set_blaster_override(True)
         try:
             self.async_write_ha_state()
         except Exception:
@@ -492,6 +516,9 @@ class SuperfanEntity(FanEntity, RestoreEntity):
         is_avail = is_blaster_available_by_sensor(new_raw, self._availability_entity_id) if new_raw else False
 
         self._ir_blaster_available_override = None
+        entry_data = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id) if hasattr(self, "hass") and self.hass else None
+        if entry_data and hasattr(entry_data, "set_blaster_override"):
+            entry_data.set_blaster_override(True)
         try:
             self.async_write_ha_state()
         except Exception:
@@ -504,6 +531,30 @@ class SuperfanEntity(FanEntity, RestoreEntity):
                 if st is not None and str(st.state).lower() in (STATE_UNAVAILABLE, STATE_UNKNOWN):
                     return
             await self._async_trigger_reconnect_resync()
+
+    @callback
+    def _async_mqtt_connection_changed(self, status: bool | None = None) -> None:
+        """Handle MQTT broker connection state updates."""
+        self._ir_blaster_available_override = None
+        entry_data = (
+            self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id)
+            if hasattr(self, "hass") and self.hass
+            else None
+        )
+        if entry_data and hasattr(entry_data, "set_blaster_override"):
+            entry_data.set_blaster_override(True)
+        try:
+            self.async_write_ha_state()
+        except Exception:
+            pass
+
+        if status is True:
+            # Check availability sensor boundary if configured
+            if self._availability_entity_id and hasattr(self, "hass") and self.hass:
+                st = self.hass.states.get(self._availability_entity_id)
+                if st is not None and not is_blaster_available_by_sensor(st.state, self._availability_entity_id):
+                    return
+            self.hass.async_create_task(self._async_trigger_reconnect_resync())
 
     def _map_speed_to_percentage(self, speed_key: str) -> int:
         if self._model in (MODEL_ATOMBERG, MODEL_ACTIVA):
@@ -651,7 +702,7 @@ class SuperfanEntity(FanEntity, RestoreEntity):
                     {
                         "entity_id": emitter,
                         "command": [f"b64:{payload}" if not payload.startswith("b64:") else payload],
-                        "num_repeats": 2,
+                        "num_repeats": 1,
                         "delay_secs": 0.1,
                     },
                     blocking=True,
@@ -665,7 +716,7 @@ class SuperfanEntity(FanEntity, RestoreEntity):
                     {
                         "entity_id": emitter,
                         "command": [payload],
-                        "num_repeats": 2,
+                        "num_repeats": 1,
                         "delay_secs": 0.1,
                     },
                     blocking=True,
@@ -679,7 +730,7 @@ class SuperfanEntity(FanEntity, RestoreEntity):
                     {
                         "entity_id": emitter,
                         "command": [pronto_payload],
-                        "num_repeats": 2,
+                        "num_repeats": 1,
                         "delay_secs": 0.1,
                     },
                     blocking=True,
@@ -687,16 +738,45 @@ class SuperfanEntity(FanEntity, RestoreEntity):
                 )
             elif fmt == IR_FORMAT_TASMOTA:
                 tasmota_payload = SuperfanNEC.get_tasmota_payload(code_key, self._model)
-                await self.hass.services.async_call(
-                    "remote",
-                    "send_command",
-                    {
-                        "entity_id": emitter,
-                        "command": [tasmota_payload["Data"]],
-                    },
-                    blocking=True,
-                    context=self._context,
-                )
+                payload_json = json.dumps(tasmota_payload)
+                if is_mqtt_topic(emitter):
+                    if not self.hass.services.has_service("mqtt", "publish"):
+                        raise HomeAssistantError("MQTT service 'mqtt.publish' is not available")
+                    _LOGGER.info(
+                        "[Superfan IR] Transmitting Tasmota IR via mqtt.publish -> %s: %s",
+                        emitter,
+                        payload_json,
+                    )
+                    try:
+                        await self.hass.services.async_call(
+                            "mqtt",
+                            "publish",
+                            {
+                                "topic": emitter,
+                                "payload": payload_json,
+                            },
+                            blocking=True,
+                            context=self._context,
+                        )
+                    except Exception as err:
+                        _LOGGER.error("Failed to publish Tasmota IR command to %s: %s", emitter, err)
+                        raise HomeAssistantError(f"Failed to publish MQTT IR command to {emitter}: {err}") from err
+                else:
+                    _LOGGER.info(
+                        "[Superfan IR] Transmitting Tasmota IR via remote.send_command -> %s: %s",
+                        emitter,
+                        tasmota_payload["Data"],
+                    )
+                    await self.hass.services.async_call(
+                        "remote",
+                        "send_command",
+                        {
+                            "entity_id": emitter,
+                            "command": [tasmota_payload["Data"]],
+                        },
+                        blocking=True,
+                        context=self._context,
+                    )
             else:
                 from .utils import RawIRCommand
                 from homeassistant.components.infrared.helpers import async_send_command
@@ -718,6 +798,9 @@ class SuperfanEntity(FanEntity, RestoreEntity):
                             "ESPHome 2026.10+ IR blaster %s timed out after 2.5s waiting for transmit completion",
                             emitter,
                         )
+                        entry_data = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id) if hasattr(self, "hass") and self.hass else None
+                        if entry_data and hasattr(entry_data, "set_blaster_override"):
+                            entry_data.set_blaster_override(False)
                         self._ir_blaster_available_override = False
                         self.async_write_ha_state()
                         raise HomeAssistantError(
@@ -729,6 +812,9 @@ class SuperfanEntity(FanEntity, RestoreEntity):
                             emitter,
                             err,
                         )
+                        entry_data = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id) if hasattr(self, "hass") and self.hass else None
+                        if entry_data and hasattr(entry_data, "set_blaster_override"):
+                            entry_data.set_blaster_override(False)
                         self._ir_blaster_available_override = False
                         self.async_write_ha_state()
                         raise HomeAssistantError(
@@ -736,6 +822,11 @@ class SuperfanEntity(FanEntity, RestoreEntity):
                         )
                 else:
                     await async_send_command(self.hass, emitter, command)
+
+            entry_data = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id) if hasattr(self, "hass") and self.hass else None
+            if entry_data and hasattr(entry_data, "set_blaster_override"):
+                entry_data.set_blaster_override(True)
+            self._ir_blaster_available_override = True
             return True
         except HomeAssistantError:
             raise

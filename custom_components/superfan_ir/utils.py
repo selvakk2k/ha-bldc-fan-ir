@@ -1,3 +1,6 @@
+import logging
+from typing import Any
+
 from .const import (
     MODEL_ACTIVA,
     MODEL_ATOMBERG,
@@ -12,6 +15,8 @@ except ImportError:
         """Fallback Command class when infrared_protocols is not installed."""
         def __init__(self, modulation: int = 38000) -> None:
             self.modulation = modulation
+
+_LOGGER = logging.getLogger(__name__)
 
 class RawIRCommand(Command):  # type: ignore[misc, valid-type]
     """A raw IR command that takes a list of durations (in microseconds)."""
@@ -86,4 +91,61 @@ def is_blaster_available_by_sensor(state_val: Any, entity_id: str | None) -> boo
         return False
     # Standard availability (switch ON = available, device_tracker 'home' = available)
     return s in ("on", "home", "connected", "true", "1")
+
+
+def is_mqtt_topic(value: str | None) -> bool:
+    """Return True if value represents an MQTT topic rather than a Home Assistant entity ID."""
+    if not value or not isinstance(value, str):
+        return False
+    # MQTT topics usually contain '/' (e.g. cmnd/tasmota/IRsend) or start with cmnd/
+    if "/" in value or value.startswith("cmnd/") or value.startswith("stat/") or value.startswith("tele/"):
+        return True
+    # If it has no dot, it cannot be a Home Assistant entity_id (domain.object_id)
+    if "." not in value:
+        return True
+    return False
+
+
+def emitter_available(
+    hass: Any,
+    emitter_id: str | None,
+    availability_entity_id: str | None = None,
+    blaster_override: bool = True,
+) -> bool:
+    """Return True if the IR blaster emitter is online and available."""
+    if not blaster_override:
+        return False
+
+    if availability_entity_id and hass:
+        st = hass.states.get(availability_entity_id)
+        if st is not None and not is_blaster_available_by_sensor(st.state, availability_entity_id):
+            return False
+
+    if not emitter_id:
+        return False
+
+    if is_mqtt_topic(emitter_id):
+        # Verify MQTT publish service is registered if hass services are loaded
+        if hass and hasattr(hass, "services") and hasattr(hass.services, "has_service"):
+            if not hass.services.has_service("mqtt", "publish"):
+                return False
+        try:
+            from homeassistant.components import mqtt
+            if hasattr(mqtt, "is_connected") and not mqtt.is_connected(hass):
+                return False
+        except (ImportError, AttributeError):
+            return False
+        except Exception as err:
+            _LOGGER.debug("Unexpected error checking MQTT connection state: %s", err)
+        return True
+
+    if "." not in emitter_id:
+        return True
+
+    if hass and hasattr(hass, "states") and hasattr(hass.states, "get"):
+        st = hass.states.get(emitter_id)
+        if st is None or str(st.state).lower() in ("unavailable", "unknown", ""):
+            return False
+
+    return True
 

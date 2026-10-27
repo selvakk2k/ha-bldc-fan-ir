@@ -48,7 +48,7 @@ def test_command_byte_lookups():
 
 def test_nec_addresses():
     assert SuperfanNEC.get_address(MODEL_T10) == 0x00DF
-    assert SuperfanNEC.get_address(MODEL_ATOMBERG) == 0xF300
+    assert SuperfanNEC.get_address(MODEL_ATOMBERG) == 0x00F3
     assert SuperfanNEC.get_address(MODEL_ACTIVA) == 0x5AA5
     assert SuperfanNEC.get_address(MODEL_ORIENT) == 0x6B94
     assert SuperfanNEC.get_address(MODEL_GOLDMEDAL) == 0x5A95
@@ -70,19 +70,40 @@ def test_tuya_and_broadlink_encoding():
     raw = base64.b64decode(b64_broadlink)
     assert raw[0] == 0x26
 
+    # Verify Broadlink Atomberg packet
+    b64_atomberg = SuperfanNEC.get_broadlink_base64("Power", MODEL_ATOMBERG)
+    raw_atomberg = base64.b64decode(b64_atomberg)
+    assert raw_atomberg[0] == 0x26
+
 
 def test_pronto_and_tasmota():
     pronto = SuperfanNEC.get_pronto_hex("Power", MODEL_ACTIVA)
     assert pronto.startswith("0000 006D")
 
+    # Known vector regression test (LG TV Power [0x04, 0xFB, 0x08, 0xF7] -> 0x20DF10EF)
+    known_vector = [0x04, 0xFB, 0x08, 0xF7]
+    reversed_hex = f"0x{''.join(f'{SuperfanNEC.reverse_byte_bits(b):02X}' for b in known_vector)}"
+    assert reversed_hex == "0x20DF10EF"
+
+    # Superfan Power (wire: 0x00DF9867 -> Tasmota MSB: 0x00FB19E6)
+    tasmota_superfan = SuperfanNEC.get_tasmota_payload("Power", MODEL_T10)
+    assert tasmota_superfan["Data"] == "0x00FB19E6"
+
+    # Atomberg Power (wire: 0x00F3916E -> Tasmota MSB: 0x00CF8976)
+    tasmota_atomberg = SuperfanNEC.get_tasmota_payload("Power", MODEL_ATOMBERG)
+    assert tasmota_atomberg["Data"] == "0x00CF8976"
+
+    # Activa Power (wire: 0x5AA5EA15 -> Tasmota MSB: 0x5AA557A8)
     tasmota_activa = SuperfanNEC.get_tasmota_payload("Power", MODEL_ACTIVA)
-    assert tasmota_activa["Data"] == "0x5AA5EA15"
+    assert tasmota_activa["Data"] == "0x5AA557A8"
 
+    # Orient Power On (wire: 0x6B94AA55 -> Tasmota MSB: 0xD62955AA)
     tasmota_orient = SuperfanNEC.get_tasmota_payload("Power On", MODEL_ORIENT)
-    assert tasmota_orient["Data"] == "0x6B94AA55"
+    assert tasmota_orient["Data"] == "0xD62955AA"
 
+    # Goldmedal Power (wire: 0x5A9533CC -> Tasmota MSB: 0x5AA9CC33)
     tasmota_gm = SuperfanNEC.get_tasmota_payload("Power", MODEL_GOLDMEDAL)
-    assert tasmota_gm["Data"] == "0x5A9533CC"
+    assert tasmota_gm["Data"] == "0x5AA9CC33"
 
 
 def test_nec_decoding():
@@ -91,3 +112,12 @@ def test_nec_decoding():
     assert SuperfanNEC.decode_nec(ACTIVA_ADDRESS, 0xEA) == "Power"
     assert SuperfanNEC.decode_nec(ORIENT_ADDRESS, 0xAA) == "Power On"
     assert SuperfanNEC.decode_nec(GOLDMEDAL_ADDRESS, 0x33) == "Power"
+
+
+def test_atomberg_command_bytes_no_collision():
+    from custom_components.superfan_ir.ir import ATOMBERG_COMMAND_BYTES
+
+    command_bytes = set(ATOMBERG_COMMAND_BYTES.values())
+    for cmd in command_bytes:
+        inv = (~cmd) & 0xFF
+        assert inv not in command_bytes, f"Collision detected: cmd 0x{cmd:02X} inverse 0x{inv:02X} is also a command"

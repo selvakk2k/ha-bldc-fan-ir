@@ -18,17 +18,28 @@ class SuperfanEntryData:
     def __init__(self, entry: ConfigEntry) -> None:
         self.entry = entry
         self.last_controlled_via: str = "IR Blaster"
+        self.ir_blaster_available_override: bool = True
         self.listeners: list[Callable[[], None]] = []
 
     def set_last_controlled_via(self, source: str) -> None:
         """Update last controlled source and notify listeners."""
         if self.last_controlled_via != source:
             self.last_controlled_via = source
-            for listener in list(self.listeners):
-                try:
-                    listener()
-                except Exception as err:
-                    _LOGGER.debug("Error notifying listener: %s", err)
+            self._notify_listeners()
+
+    def set_blaster_override(self, available: bool) -> None:
+        """Update IR blaster override availability and notify listeners."""
+        if self.ir_blaster_available_override != available:
+            self.ir_blaster_available_override = available
+            self._notify_listeners()
+
+    def _notify_listeners(self) -> None:
+        """Notify registered state listeners."""
+        for listener in list(self.listeners):
+            try:
+                listener()
+            except Exception as err:
+                _LOGGER.debug("Error notifying listener: %s", err)
 
     def add_listener(self, listener: Callable[[], None]) -> Callable[[], None]:
         """Register a state listener."""

@@ -18,7 +18,12 @@ from .const import (
     DOMAIN,
     MODEL_ATOMBERG,
 )
-from .utils import get_manufacturer, is_blaster_available_by_sensor
+from .utils import (
+    emitter_available,
+    get_manufacturer,
+    is_blaster_available_by_sensor,
+    is_mqtt_topic,
+)
 
 
 async def async_setup_entry(
@@ -79,27 +84,47 @@ class SuperfanIRBlasterAvailableBinarySensor(BinarySensorEntity):
     @property
     def is_on(self) -> bool:
         """Return true if the IR blaster is online and available."""
-        if self._availability_entity_id and hasattr(self, "hass") and self.hass:
-            st = self.hass.states.get(self._availability_entity_id)
-            if st is not None and not is_blaster_available_by_sensor(st.state, self._availability_entity_id):
-                return False
-        if not self._emitter_id:
-            return False
-        # ESPHome text/service names don't map to HA states directly, so assume True if set
-        if not ("." in self._emitter_id):
-            return True
-        st = self.hass.states.get(self._emitter_id)
-        return st is not None and st.state not in ("unavailable", "unknown")
+        entry_data = None
+        if hasattr(self, "hass") and self.hass:
+            entry_data = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id)
+        blaster_override = entry_data.ir_blaster_available_override if entry_data else True
+        return emitter_available(
+            self.hass if hasattr(self, "hass") else None,
+            self._emitter_id,
+            self._availability_entity_id,
+            blaster_override=blaster_override,
+        )
 
     async def async_added_to_hass(self) -> None:
         """Register state change listeners."""
-        await super().async_added_to_hass()
-        if self._emitter_id and "." in self._emitter_id:
-            self.async_on_remove(
-                async_track_state_change_event(
-                    self.hass, [self._emitter_id], self._async_emitter_changed
+        if hasattr(super(), "async_added_to_hass"):
+            await super().async_added_to_hass()
+        if hasattr(self, "hass") and self.hass:
+            entry_data = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id)
+            if entry_data and hasattr(entry_data, "add_listener"):
+                self.async_on_remove(entry_data.add_listener(self.async_write_ha_state))
+
+        if self._emitter_id:
+            if is_mqtt_topic(self._emitter_id):
+                try:
+                    from homeassistant.components.mqtt.const import MQTT_CONNECTION_STATE
+                except ImportError:
+                    MQTT_CONNECTION_STATE = "mqtt_connection_state"
+                from homeassistant.helpers.dispatcher import async_dispatcher_connect
+
+                self.async_on_remove(
+                    async_dispatcher_connect(
+                        self.hass,
+                        MQTT_CONNECTION_STATE,
+                        self._async_mqtt_connection_changed,
+                    )
                 )
-            )
+            elif "." in self._emitter_id:
+                self.async_on_remove(
+                    async_track_state_change_event(
+                        self.hass, [self._emitter_id], self._async_emitter_changed
+                    )
+                )
         if self._availability_entity_id and "." in self._availability_entity_id:
             self.async_on_remove(
                 async_track_state_change_event(
@@ -110,4 +135,9 @@ class SuperfanIRBlasterAvailableBinarySensor(BinarySensorEntity):
     @callback
     def _async_emitter_changed(self, event: Event) -> None:
         """Handle blaster state change."""
+        self.async_write_ha_state()
+
+    @callback
+    def _async_mqtt_connection_changed(self, status: bool | None = None) -> None:
+        """Handle MQTT broker connection state updates."""
         self.async_write_ha_state()

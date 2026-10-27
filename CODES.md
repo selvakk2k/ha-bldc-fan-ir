@@ -21,19 +21,22 @@ $$\text{32-bit NEC Frame} = [\text{Address (16-bit)}] + [\text{Command (8-bit)}]
 
 | Brand / Model Identifier | 16-Bit Address | Capture / Verification Provenance | Status |
 | :--- | :--- | :--- | :--- |
-| **Superfan (T12/6 Series)** | `0x00DF` | Physical Remote Tuya IR Hub `remote.learn_command` Capture | ✅ Hardware Verified |
-| **Superfan (T10 Series)** | `0x00DF` | Tuya Database Grab, Cross-Checked against Hardware-Verified T12/6 Protocol | ✅ Verified |
-| **Atomberg (Renesa, Efficio, Studio, Aris)** | `0xF300` | Physical Remote Hardware Capture | ✅ Hardware Verified |
-| **Activa (Gracia, Energia, Apsara Series)** | `0x5AA5` | App-Sourced Database Cross-Checked against NEC Specs | ✅ Verified |
-| **Orient Electric (I-Tome, Aeroslim, Wendy)** | `0x6B94` | App-Sourced Database Cross-Checked against NEC Specs | ✅ Verified |
-| **Goldmedal (Opus Prime, Winzo, Spacio)** | `0x5A95` | App-Sourced Database Cross-Checked against NEC Specs | ✅ Verified |
+| **Superfan (T12/6 Series)** | `0x00DF` | Physical Remote Tuya IR Hub `remote.learn_command` Capture | Hardware Verified |
+| **Superfan (T10 Series)** | `0x00DF` | Tuya Database Grab, Cross-Checked against Hardware-Verified T12/6 Protocol | Verified |
+| **Atomberg (Renesa, Efficio, Studio, Aris)** | `0x00F3` | SmartIR 1160/1170 Captures & Inverted-NEC Cross-Check | SmartIR-Sourced |
+| **Activa (Gracia, Energia, Apsara Series)** | `0x5AA5` | App-Sourced Database Cross-Checked against NEC Specs | Verified |
+| **Orient Electric (I-Tome, Aeroslim, Wendy)** | `0x6B94` | App-Sourced Database Cross-Checked against NEC Specs | Verified |
+| **Goldmedal (Opus Prime, Winzo, Spacio)** | `0x5A95` | App-Sourced Database Cross-Checked against NEC Specs | Verified |
 
 ---
 
 ## 3. Command Byte Tables (Hex)
 
+> [!NOTE]
+> **Logical Wire Order vs Tasmota Data Hex**: The 32-bit hex values in the tables below represent **logical wire order** (LSB-first transmission, as used by Raw IR, Broadlink base64, Tuya, and Pronto CCF). Tasmota's `IRsend` (`IRremoteESP8266`) streams MSB-first and requires each byte's bits to be reversed in its JSON `Data` field (e.g. Superfan Power `0x00DF9867` wire -> `0x00FB19E6` Tasmota; Atomberg Power `0x00F3916E` wire -> `0x00CF8976` Tasmota).
+
 ### Superfan (T10 & T12/6) — Address `0x00DF`
-| Action / Speed | Command Byte | NEC 32-bit Hex Code |
+| Action / Speed | Command Byte | NEC 32-bit Wire Hex |
 | :--- | :--- | :--- |
 | **Power Toggle** | `0x98` | `0x00DF9867` |
 | **Speed 1 / Low / Eco / Sleep** | `0x94` | `0x00DF946B` |
@@ -48,19 +51,20 @@ $$\text{32-bit NEC Frame} = [\text{Address (16-bit)}] + [\text{Command (8-bit)}]
 | **Wellness Mode** | `0x92` | `0x00DF926D` |
 | **AC Mix** | `0x97` | `0x00DF9768` |
 
-### Atomberg (Renesa, Efficio, Studio) — Address `0xF300`
-| Action / Speed | Command Byte | NEC 32-bit Hex Code |
+### Atomberg (Renesa, Efficio, Studio, Aris) — Address `0x00F3`
+Frame format: `[0x00, 0xF3, ~Cmd, Cmd]`
+| Action / Speed | Command Byte | NEC 32-bit Wire Hex |
 | :--- | :--- | :--- |
-| **Power Toggle** | `0x03` | `0xF30003FC` |
-| **Speed 1** | `0x04` | `0xF30004FB` |
-| **Speed 2** | `0x05` | `0xF30005FA` |
-| **Speed 3** | `0x06` | `0xF30006F9` |
-| **Speed 4** | `0x07` | `0xF30007F8` |
-| **Speed 5** | `0x08` | `0xF30008F7` |
-| **Boost / Speed 6** | `0x09` | `0xF30009F6` |
-| **Sleep Mode** | `0x0A` | `0xF3000AF5` |
-| **Timer** | `0x0B` | `0xF3000BF4` |
-| **LED Light** | `0x0C` | `0xF3000CF3` |
+| **Power Toggle** | `0x6E` | `0x00F3916E` |
+| **Speed 1** | `0x74` | `0x00F38B74` |
+| **Speed 2** | `0x6F` | `0x00F3906F` |
+| **Speed 3** | `0x75` | `0x00F38A75` |
+| **Speed 4** | `0x6C` | `0x00F3936C` |
+| **Speed 5** | `0x77` | `0x00F38877` |
+| **Boost / Speed 6** | `0x70` | `0x00F38F70` |
+| **Sleep Mode** | `0x71` | `0x00F38E71` |
+| **Timer** | `0x69` | `0x00F39669` |
+| **LED Light** | `0x68` | `0x00F39768` |
 
 ### Activa (Gracia / Energia) — Address `0x5AA5`
 | Action / Speed | Command Byte | NEC 32-bit Hex Code |
@@ -99,4 +103,4 @@ $$\text{32-bit NEC Frame} = [\text{Address (16-bit)}] + [\text{Command (8-bit)}]
 * **Broadlink Base64 (`remote.send_command`)**: `0x26` packet format encoded in Base64 (`b64:Jg...`).
 * **Tuya Base64 (`remote.send_command`)**: Little-endian 16-bit integer pulse timings in Base64.
 * **Pronto Hex**: Universal CCF format string (`0000 006D 0022 0000 ...`).
-* **Tasmota MQTT**: JSON payload `{"Protocol": "NEC", "Bits": 32, "Data": "0x00DF9867"}`.
+* **Tasmota MQTT**: JSON payload `{"Protocol": "NEC", "Bits": 32, "Data": "0x00FB19E6"}` (per-byte bit-reversed hex for IRremoteESP8266).
