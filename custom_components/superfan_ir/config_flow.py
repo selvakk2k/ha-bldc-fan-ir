@@ -212,6 +212,7 @@ class SuperfanOptionsFlow(OptionsFlow):
             mqtt_topic = (clean_input.get(CONF_MQTT_TOPIC) or "").strip()
             remote_ent = clean_input.get(CONF_EMITTER_ENTITY_ID)
             avail_topic = (clean_input.get(CONF_AVAILABILITY_TOPIC) or "").strip()
+            clean_input[CONF_AVAILABILITY_ENTITY_ID] = clean_input.get(CONF_AVAILABILITY_ENTITY_ID) or ""
 
             if avail_topic and not validate_mqtt_topic(avail_topic):
                 errors["base"] = "invalid_availability_topic"

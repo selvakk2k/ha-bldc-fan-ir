@@ -214,6 +214,7 @@ logger:
 ### Project Contributors & AI Attribution
 * **Lead Architecture & Hardware Validation**: [@selvakk2k](https://github.com/selvakk2k) — physical remote captures, protocol verification on hardware units, and domain architecture.
 * **Code Implementation & Engineering**: **Antigravity** (Google DeepMind) — multi-brand protocol decoders, native `infrared` platform integration, and config flows.
+* **Automated Code Review & Auditing**: **CodeRabbit** ([@coderabbitai](https://github.com/coderabbitai)) — automated pull request and pre-commit code reviews, edge case detection, and security verification.
 * **Pre-Release Code Review & Auditing**: **Claude** (Anthropic) — independent code review, timing accuracy audits, and edge-case verification.
 
 Licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.

@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import MagicMock
 from custom_components.superfan_ir.config_flow import SuperfanConfigFlow, SuperfanOptionsFlow
 from custom_components.superfan_ir.const import (
+    CONF_AVAILABILITY_ENTITY_ID,
     CONF_BOOT_DELAY,
     CONF_EMITTER_ENTITY_ID,
     CONF_FAN_MODEL,
@@ -358,5 +359,34 @@ async def test_options_flow_with_and_without_valid_availability_topic():
     })
     assert res_ok["type"] == "create_entry"
     assert res_ok["data"][CONF_AVAILABILITY_TOPIC] == "tele/new_topic/LWT"
+
+
+@pytest.mark.asyncio
+async def test_options_flow_clears_availability_entity():
+    """Test options flow explicitly clears availability entity when omitted."""
+    entry = MagicMock()
+    entry.data = {
+        CONF_FAN_MODEL: MODEL_ATOMBERG,
+        CONF_IR_FORMAT: IR_FORMAT_PRONTO,
+        CONF_EMITTER_ENTITY_ID: "remote.blaster",
+        CONF_AVAILABILITY_ENTITY_ID: "binary_sensor.blaster_status",
+    }
+    entry.options = {
+        CONF_FAN_MODEL: MODEL_ATOMBERG,
+        CONF_IR_FORMAT: IR_FORMAT_PRONTO,
+        CONF_EMITTER_ENTITY_ID: "remote.blaster",
+        CONF_AVAILABILITY_ENTITY_ID: "binary_sensor.blaster_status",
+    }
+
+    flow = SuperfanOptionsFlow(entry)
+    flow.hass = MagicMock()
+
+    res = await flow.async_step_init({
+        CONF_FAN_MODEL: MODEL_ATOMBERG,
+        CONF_IR_FORMAT: IR_FORMAT_PRONTO,
+        CONF_EMITTER_ENTITY_ID: "remote.blaster",
+    })
+    assert res["type"] == "create_entry"
+    assert res["data"][CONF_AVAILABILITY_ENTITY_ID] == ""
 
 
