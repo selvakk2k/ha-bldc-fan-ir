@@ -7,7 +7,7 @@
   </picture>
 </p>
 
-[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=flat-square)](https://github.com/hacs/integration)
+[![Marketplace Custom](https://img.shields.io/badge/Marketplace-Custom-41BDF5.svg?style=flat-square)](https://www.home-assistant.io/integrations/marketplace/)
 [![Stable](https://img.shields.io/github/v/release/selvakk2k/ha-bldc-fan-ir?label=Stable&style=flat-square)](https://github.com/selvakk2k/ha-bldc-fan-ir/releases/latest)
 [![Beta](https://img.shields.io/github/v/release/selvakk2k/ha-bldc-fan-ir?include_prereleases&label=Beta&color=orange&style=flat-square)](https://github.com/selvakk2k/ha-bldc-fan-ir/releases)
 [![AI-Assisted](https://img.shields.io/badge/AI%20Assisted-Antigravity%20%7C%20Claude-blueviolet?style=flat-square&logo=google)](https://github.com/selvakk2k)
@@ -101,13 +101,27 @@ The integration automatically generates and encodes signals for all supported bl
 
 * **Prerequisites**: Home Assistant **2024.1.0** or newer.
 
-### Method 1: Using HACS (Recommended)
+### Method 1: Via Home Assistant Marketplace (Recommended)
+
+*Requires Home Assistant **2026.11** or newer. (On an older version? Expand the legacy HACS instructions below.)*
+
+[![Open your Home Assistant instance and open a repository in the Marketplace.](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=selvakk2k&repository=ha-bldc-fan-ir&category=integration)
+
+1. Click the **Open Marketplace repository** button above, or go to **Settings** → **Marketplace** in Home Assistant.
+2. In the upper-right corner, select **Add from link**.
+3. Under **GitHub link**, enter `https://github.com/selvakk2k/ha-bldc-fan-ir` (connect your GitHub account if prompted), then select **Add**. *(If prompted for **Type**, select **Integration** and select **Add** again.)*
+4. Open **Indian BLDC Fan IR** from the list, select **Download**, and restart Home Assistant.
+
+<details>
+<summary>Home Assistant 2026.10 or older (Legacy HACS)</summary>
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=selvakk2k&repository=ha-bldc-fan-ir&category=integration)
 
 1. Click the **Open repository in HACS** button above, or open **HACS** from your Home Assistant sidebar.
 2. Click the top-right menu (⋮) → **Custom repositories** → Add `https://github.com/selvakk2k/ha-bldc-fan-ir` with category **Integration**.
 3. Search for **Indian BLDC Fan IR**, click **Download**, and restart Home Assistant.
+
+</details>
 
 ### Method 2: Manual Installation
 1. Download the latest release ZIP from the [Releases](https://github.com/selvakk2k/ha-bldc-fan-ir/releases) page.
