@@ -44,7 +44,7 @@ jobs:
                     labels: ['needs-triage']
                   });
                 } catch (err) {
-                  core.info(Note: 'needs-triage' label not present or could not be added: );
+                  core.info(`Note: 'needs-triage' label not present or could not be added: ${err.message}`);
                 }
               }
             } else if (context.eventName === 'pull_request_target') {
@@ -69,7 +69,7 @@ jobs:
                     reviewers: [targetUser]
                   });
                 } catch (err) {
-                  core.info(Could not request review: );
+                  core.info(`Could not request review: ${err.message}`);
                 }
               }
 
@@ -82,6 +82,6 @@ jobs:
                   body: '@coderabbitai review'
                 });
               } catch (err) {
-                core.info(Could not summon CodeRabbit: );
+                core.info(`Could not summon CodeRabbit: ${err.message}`);
               }
             }
