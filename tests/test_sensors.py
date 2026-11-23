@@ -31,6 +31,14 @@ async def test_ir_blaster_available_binary_sensor(mock_entry):
     sensor.hass.states.get.return_value = blaster_state
     assert sensor.is_on is True
 
+    # Blaster state is unknown (e.g. stateless infrared emitter after reconnect)
+    blaster_state.state = "unknown"
+    assert sensor.is_on is True
+
+    # Blaster state is timestamp string (e.g. after IR transmission)
+    blaster_state.state = "2026-11-20T21:14:38.062+00:00"
+    assert sensor.is_on is True
+
     # Blaster state is unavailable
     blaster_state.state = "unavailable"
     assert sensor.is_on is False

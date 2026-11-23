@@ -144,7 +144,7 @@ def emitter_available(
 
     if hass and hasattr(hass, "states") and hasattr(hass.states, "get"):
         st = hass.states.get(emitter_id)
-        if st is None or str(st.state).lower() in ("unavailable", "unknown", ""):
+        if st is None or str(st.state).lower() in ("unavailable", "none", ""):
             return False
 
     return True
