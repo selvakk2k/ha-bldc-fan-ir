@@ -194,7 +194,13 @@ logger:
     custom_components.superfan_ir: debug
 ```
 
-### 2. IR Blaster Troubleshooting
+### 2. Changing Remote Model or IR Blaster (Reconfigure Flow)
+To update the fan brand, remote protocol model, or transmitter entity without removing the device:
+1. Go to **Settings → Devices & Services → Indian BLDC Fan IR**.
+2. Click the top-right menu (**⋮**) on your fan device card → **Reconfigure**.
+3. Select your updated brand, remote profile, or target IR transmitter entity and submit. All existing entity IDs, Lovelace cards, and automations are retained.
+
+### 3. IR Blaster Troubleshooting
 * **Transmitter Line-of-Sight**: Verify your IR blaster LED has an unobstructed line of sight to the fan motor housing or canopy sensor dome.
 * **Carrier Frequency**: Ensure your receiver/transmitter hardware is configured for **38 kHz** modulated carrier frequency.
 * **Raw Protocol**: For ESPHome devices with native `infrared` components, select **Raw** or **Auto-Detect** in the integration configuration for microsecond-precise hardware pulsing.
