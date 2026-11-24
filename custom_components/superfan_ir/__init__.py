@@ -54,6 +54,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Superfan IR from a config entry."""
     hass.data.setdefault(DOMAIN, {})
     entry_data = SuperfanEntryData(entry)
+    try:
+        entry.runtime_data = entry_data
+    except AttributeError:
+        pass
     hass.data[DOMAIN][entry.entry_id] = entry_data
 
     avail_topic = entry_data.availability_topic

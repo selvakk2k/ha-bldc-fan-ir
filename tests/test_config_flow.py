@@ -390,3 +390,41 @@ async def test_options_flow_clears_availability_entity():
     assert res["data"][CONF_AVAILABILITY_ENTITY_ID] == ""
 
 
+@pytest.mark.asyncio
+async def test_reconfigure_flow():
+    """Test reconfigure flow updates name and model in-place."""
+    from custom_components.superfan_ir.const import MODEL_ORIENT
+
+    entry = MagicMock()
+    entry.entry_id = "test_reconfigure_1"
+    entry.title = "Old Fan Name"
+    entry.data = {
+        "name": "Old Fan Name",
+        CONF_FAN_MODEL: MODEL_ATOMBERG,
+        CONF_IR_FORMAT: IR_FORMAT_AUTO,
+        CONF_EMITTER_ENTITY_ID: "remote.blaster",
+    }
+
+    flow = SuperfanConfigFlow()
+    flow.hass = MagicMock()
+    flow.reconfigure_entry = entry
+    flow.context = {"entry_id": "test_reconfigure_1"}
+
+    # Initial step shows form
+    res = await flow.async_step_reconfigure()
+    assert res["type"] == "form"
+    assert res["step_id"] == "reconfigure"
+
+    # Submit updated configuration
+    res2 = await flow.async_step_reconfigure({
+        "name": "Updated Fan Name",
+        CONF_FAN_MODEL: MODEL_ORIENT,
+        CONF_IR_FORMAT: IR_FORMAT_PRONTO,
+    })
+    assert res2["type"] == "abort"
+    assert res2["reason"] == "reconfigure_successful"
+    assert entry.data["name"] == "Updated Fan Name"
+    assert entry.data[CONF_FAN_MODEL] == MODEL_ORIENT
+    assert entry.data[CONF_IR_FORMAT] == IR_FORMAT_PRONTO
+
+

@@ -110,6 +110,12 @@ def setup_ha_stubs():
             return {"type": "create_entry", "title": title, "data": data, "options": options}
         def async_abort(self, reason=""):
             return {"type": "abort", "reason": reason}
+        def _get_reconfigure_entry(self):
+            return getattr(self, "reconfigure_entry", None)
+        def async_update_reload_and_abort(self, entry, data=None, reason="reconfigure_successful"):
+            if data and hasattr(entry, "data"):
+                entry.data.update(data)
+            return {"type": "abort", "reason": reason}
         async def async_set_unique_id(self, unique_id=None, raise_on_progress=True):
             self.unique_id = unique_id
         def _abort_if_unique_id_configured(self):

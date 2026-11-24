@@ -187,6 +187,57 @@ class SuperfanConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle reconfiguring the fan integration entry."""
+        if hasattr(self, "_get_reconfigure_entry"):
+            entry = self._get_reconfigure_entry()
+        else:
+            entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
+
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            if hasattr(self, "async_update_reload_and_abort"):
+                return self.async_update_reload_and_abort(
+                    entry,
+                    data={**entry.data, **user_input},
+                    reason="reconfigure_successful",
+                )
+            self.hass.config_entries.async_update_entry(
+                entry, data={**entry.data, **user_input}
+            )
+            await self.hass.config_entries.async_reload(entry.entry_id)
+            return self.async_abort(reason="reconfigure_successful")
+
+        current_name = entry.data.get("name", entry.title)
+        current_model = entry.data.get(CONF_FAN_MODEL, MODEL_ATOMBERG)
+        current_format = entry.data.get(CONF_IR_FORMAT, IR_FORMAT_AUTO)
+
+        data_schema = vol.Schema({
+            vol.Required("name", default=current_name): selector.TextSelector(),
+            vol.Required(CONF_FAN_MODEL, default=current_model): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=_get_model_select_options(),
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                )
+            ),
+            vol.Required(CONF_IR_FORMAT, default=current_format): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=_get_ir_format_select_options(),
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                )
+            ),
+        })
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=data_schema,
+            errors=errors,
+            description_placeholders={"name": current_name},
+        )
+
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:

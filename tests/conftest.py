@@ -105,6 +105,14 @@ class OptionsFlow:
         return {"type": "form", "step_id": step_id, "data_schema": data_schema, "errors": errors}
     def async_create_entry(self, title, data):
         return {"type": "create_entry", "title": title, "data": data}
+    def async_abort(self, reason=""):
+        return {"type": "abort", "reason": reason}
+    def _get_reconfigure_entry(self):
+        return getattr(self, "reconfigure_entry", None)
+    def async_update_reload_and_abort(self, entry, data=None, reason="reconfigure_successful"):
+        if data and hasattr(entry, "data"):
+            entry.data.update(data)
+        return {"type": "abort", "reason": reason}
 homeassistant.config_entries.OptionsFlow = OptionsFlow
 
 class ConfigFlow:
@@ -119,4 +127,12 @@ class ConfigFlow:
         return {"type": "form", "step_id": step_id, "data_schema": data_schema, "errors": errors}
     def async_create_entry(self, title, data):
         return {"type": "create_entry", "title": title, "data": data}
+    def async_abort(self, reason=""):
+        return {"type": "abort", "reason": reason}
+    def _get_reconfigure_entry(self):
+        return getattr(self, "reconfigure_entry", None)
+    def async_update_reload_and_abort(self, entry, data=None, reason="reconfigure_successful"):
+        if data and hasattr(entry, "data"):
+            entry.data.update(data)
+        return {"type": "abort", "reason": reason}
 homeassistant.config_entries.ConfigFlow = ConfigFlow

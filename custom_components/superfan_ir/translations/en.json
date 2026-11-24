@@ -30,6 +30,20 @@
           "availability_entity_id": "Optional smart plug, router device tracker, status sensor, or helper to monitor blaster availability.",
           "availability_topic": "Optional MQTT topic to monitor blaster availability (e.g. Tasmota LWT topic tele/tasmota_ir/LWT)."
         }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Fan",
+        "description": "Update the fan name, brand/remote model, or IR transmission format for **{name}**.",
+        "data": {
+          "name": "Fan Name",
+          "fan_model": "Fan Brand & Remote Model",
+          "ir_format": "IR Format"
+        },
+        "data_description": {
+          "name": "Friendly name for this fan entity.",
+          "fan_model": "Select your fan brand and remote model.",
+          "ir_format": "Select the IR signal format matching your hardware blaster."
+        }
       }
     },
     "error": {
@@ -43,7 +57,8 @@
       "topic_not_supported_for_format": "Direct MQTT topics are only supported when IR format is set to Tasmota."
     },
     "abort": {
-      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]",
+      "reconfigure_successful": "[%key:common::config_flow::abort::reconfigure_successful%]"
     }
   },
   "options": {
